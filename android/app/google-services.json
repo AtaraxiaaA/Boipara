@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "765521707078",
+    "project_id": "boipara-eb181",
+    "storage_bucket": "boipara-eb181.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:765521707078:android:26c64d04da94f3adc1ca47",
+        "android_client_info": {
+          "package_name": "com.example.bibliobd"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBP12UhaEiR27stIsYpeHcXTTmf_A61xDU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
