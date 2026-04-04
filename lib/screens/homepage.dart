@@ -11,6 +11,7 @@ import 'orders_screen.dart';
 import 'buy_books_screen.dart';
 import 'track_delivery_screen.dart';
 import 'notifications_screen.dart';
+import 'book_requests_screen.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -161,7 +162,6 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
         actions: [
-          // Live notification badge
           IconButton(
             icon: NotificationBadge(
               child: const Icon(
@@ -176,7 +176,6 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
           const SizedBox(width: 4),
-          // Profile avatar with real photo/initial
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: GestureDetector(
@@ -316,6 +315,112 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // ── Book Requests Banner ────────────────────────────────────────────
+  // Pure UI — no backend. Just navigates to BookRequestsScreen.
+  Widget _buildBookRequestsBanner() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: GestureDetector(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const BookRequestsScreen()),
+        ),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF1E3A8A), Color(0xFF1E40AF)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF1E3A8A).withValues(alpha: 0.3),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.forum_rounded,
+                  color: Colors.white,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Book Requests',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Ask the community for rare or wanted books',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.white.withValues(alpha: 0.8),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    // Tag previews
+                    Wrap(
+                      spacing: 6,
+                      children: ['Wanted', 'Rare Find', 'ISO', 'Offering']
+                          .map(
+                            (tag) => Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                tag,
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                color: Colors.white.withValues(alpha: 0.7),
+                size: 16,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   // ── 3D Layered Wave Banner ─────────────────────────────────────────
   Widget _buildLayeredWaveBanner() {
     return SizedBox(
@@ -376,7 +481,6 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
           ),
-          // Highlight strip
           Positioned(
             top: 60,
             left: 0,
@@ -395,7 +499,6 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
           ),
-          // Content
           Positioned(
             top: 20,
             left: 24,
@@ -479,7 +582,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // ── Quick Actions ──────────────────────────────────────────────────
   Widget _buildQuickActions() {
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -556,6 +658,78 @@ class _HomePageState extends State<HomePage> {
               ),
             ],
           ),
+          const SizedBox(height: 12),
+
+          // ── "Can't Find a Book?" full-width card ──────────────────
+          GestureDetector(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const BookRequestsScreen()),
+            ),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: const Color(0xFF1E3A8A).withValues(alpha: 0.25),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: darkBrown.withValues(alpha: 0.07),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E3A8A).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.manage_search_rounded,
+                      color: Color(0xFF1E3A8A),
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "Can't Find a Book?",
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1E3A8A),
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          'Post a request — the community will help you find it',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    color: const Color(0xFF1E3A8A).withValues(alpha: 0.5),
+                    size: 14,
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -614,7 +788,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // ── Book Clubs ─────────────────────────────────────────────────────
   Widget _buildBookClubsSection() {
     final bookClubs = [
       {
@@ -791,7 +964,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // ── Featured Books (real from Firebase) ───────────────────────────
   Widget _buildFeaturedBooksSection() {
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -1014,7 +1186,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // ── New Authors ────────────────────────────────────────────────────
   Widget _buildNewAuthorsSection() {
     return Container(
       margin: const EdgeInsets.all(16),
@@ -1144,7 +1315,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // ── How It Works ───────────────────────────────────────────────────
   Widget _buildHowItWorksSection() {
     final steps = [
       {
