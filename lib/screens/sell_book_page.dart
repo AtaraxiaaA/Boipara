@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:io';
-import 'package:image_picker/image_picker.dart';
 
 class SellBookPage extends StatefulWidget {
   const SellBookPage({super.key});
@@ -18,115 +16,36 @@ class _SellBookPageState extends State<SellBookPage> {
   final _buyingPriceController = TextEditingController();
   final _askingPriceController = TextEditingController();
   final _additionalNotesController = TextEditingController();
-
-  // Payment method controllers
-  final _accountHolderNameController = TextEditingController();
-  final _accountNumberController = TextEditingController();
   final _mobileNumberController = TextEditingController();
-  final _cardNumberController = TextEditingController();
 
-  List<XFile> _selectedImages = [];
-  final ImagePicker _picker = ImagePicker();
   bool _isSubmitting = false;
-
-  // Payment method state
   bool _acceptedPaymentTerms = false;
   String? _selectedPaymentMethod;
   String? _selectedMobileBanking;
-  String? _selectedBank;
 
   // Theme colors
   static const Color darkBrown = Color(0xFF613613);
   static const Color mediumBrown = Color(0xFF7C4700);
-  static const Color lightBrown = Color(0xFF7E481C);
   static const Color accentOrange = Color(0xFFE07B39);
   static const Color backgroundColor = Color(0xFFF5F0E9);
 
   final List<String> _mobileBankingOptions = ['bKash', 'Nagad', 'Upay'];
-  final List<String> _bankOptions = [
-    'Dutch-Bangla Bank (DBBL)',
-    'BRAC Bank',
-    'Eastern Bank Limited (EBL)',
-    'City Bank',
-    'Prime Bank',
-    'Islami Bank Bangladesh',
-    'Pubali Bank',
-    'Sonali Bank',
-    'Janata Bank',
-    'Agrani Bank',
-    'Rupali Bank',
-    'Standard Chartered Bangladesh',
-    'HSBC Bangladesh',
-    'Bank Asia',
-    'Mutual Trust Bank',
-    'Southeast Bank',
-    'United Commercial Bank',
-    'AB Bank',
-    'NCC Bank',
-    'One Bank',
-  ];
 
-  Future<void> _pickImages() async {
-    try {
-      final List<XFile> images = await _picker.pickMultiImage(
-        imageQuality: 80,
-        maxWidth: 1200,
-      );
-      if (images.isNotEmpty) {
-        setState(() {
-          _selectedImages.addAll(images);
-        });
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error picking images: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
-  Future<void> _takePicture() async {
-    try {
-      final XFile? image = await _picker.pickImage(
-        source: ImageSource.camera,
-        imageQuality: 80,
-        maxWidth: 1200,
-      );
-      if (image != null) {
-        setState(() {
-          _selectedImages.add(image);
-        });
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error taking picture: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
-  void _removeImage(int index) {
-    setState(() {
-      _selectedImages.removeAt(index);
-    });
+  @override
+  void dispose() {
+    _bookNameController.dispose();
+    _authorNameController.dispose();
+    _editionController.dispose();
+    _conditionController.dispose();
+    _buyingPriceController.dispose();
+    _askingPriceController.dispose();
+    _additionalNotesController.dispose();
+    _mobileNumberController.dispose();
+    super.dispose();
   }
 
   void _submitBook() {
     if (_formKey.currentState!.validate()) {
-      if (_selectedImages.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please add at least one photo of your book'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
-
       if (!_acceptedPaymentTerms) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -141,27 +60,6 @@ class _SellBookPageState extends State<SellBookPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Please select a payment method'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
-
-      // Validate payment details
-      if (_selectedPaymentMethod == 'mobile_banking' && _selectedMobileBanking == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please select a mobile banking provider'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
-
-      if (_selectedPaymentMethod == 'bank_account' && _selectedBank == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please select your bank'),
             backgroundColor: Colors.orange,
           ),
         );
@@ -210,7 +108,7 @@ class _SellBookPageState extends State<SellBookPage> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Your book has been submitted for review. We\'ll contact you within 24 hours. Payment will be sent to your selected method after the book is sold.',
+                  'Your book has been submitted for review. We\'ll contact you within 24 hours.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 14,
@@ -222,8 +120,8 @@ class _SellBookPageState extends State<SellBookPage> {
                   width: double.infinity,
                   child: ElevatedButton(
                     onPressed: () {
-                      Navigator.pop(context); // Close dialog
-                      Navigator.pop(context); // Go back to home
+                      Navigator.pop(context);
+                      Navigator.pop(context);
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: darkBrown,
@@ -247,22 +145,6 @@ class _SellBookPageState extends State<SellBookPage> {
         );
       });
     }
-  }
-
-  @override
-  void dispose() {
-    _bookNameController.dispose();
-    _authorNameController.dispose();
-    _editionController.dispose();
-    _conditionController.dispose();
-    _buyingPriceController.dispose();
-    _askingPriceController.dispose();
-    _additionalNotesController.dispose();
-    _accountHolderNameController.dispose();
-    _accountNumberController.dispose();
-    _mobileNumberController.dispose();
-    _cardNumberController.dispose();
-    super.dispose();
   }
 
   @override
@@ -334,91 +216,26 @@ class _SellBookPageState extends State<SellBookPage> {
                     color: darkBrown,
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'Add multiple photos showing front cover, back cover, and any damages',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
-                ),
                 const SizedBox(height: 12),
-
-                // Image Grid
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: Colors.grey.shade200),
                   ),
-                  child: Column(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      if (_selectedImages.isNotEmpty)
-                        GridView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 3,
-                            crossAxisSpacing: 8,
-                            mainAxisSpacing: 8,
-                          ),
-                          itemCount: _selectedImages.length,
-                          itemBuilder: (context, index) {
-                            return Stack(
-                              children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: Image.file(
-                                    File(_selectedImages[index].path),
-                                    width: double.infinity,
-                                    height: double.infinity,
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                                Positioned(
-                                  top: 4,
-                                  right: 4,
-                                  child: GestureDetector(
-                                    onTap: () => _removeImage(index),
-                                    child: Container(
-                                      padding: const EdgeInsets.all(4),
-                                      decoration: const BoxDecoration(
-                                        color: Colors.red,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: const Icon(
-                                        Icons.close,
-                                        color: Colors.white,
-                                        size: 14,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            );
-                          },
-                        ),
-                      if (_selectedImages.isNotEmpty)
-                        const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildImagePickerButton(
-                              icon: Icons.photo_library_rounded,
-                              label: 'Gallery',
-                              onTap: _pickImages,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _buildImagePickerButton(
-                              icon: Icons.camera_alt_rounded,
-                              label: 'Camera',
-                              onTap: _takePicture,
-                            ),
-                          ),
-                        ],
+                      _buildImagePickerButton(
+                        icon: Icons.photo_library_rounded,
+                        label: 'Gallery',
+                        onTap: () {},
+                      ),
+                      _buildImagePickerButton(
+                        icon: Icons.camera_alt_rounded,
+                        label: 'Camera',
+                        onTap: () {},
                       ),
                     ],
                   ),
@@ -437,7 +254,6 @@ class _SellBookPageState extends State<SellBookPage> {
                 ),
                 const SizedBox(height: 16),
 
-                // Book Name
                 _buildTextField(
                   controller: _bookNameController,
                   label: 'Book Name',
@@ -448,7 +264,6 @@ class _SellBookPageState extends State<SellBookPage> {
 
                 const SizedBox(height: 16),
 
-                // Author Name
                 _buildTextField(
                   controller: _authorNameController,
                   label: 'Author Name',
@@ -459,7 +274,6 @@ class _SellBookPageState extends State<SellBookPage> {
 
                 const SizedBox(height: 16),
 
-                // Edition (Optional)
                 _buildTextField(
                   controller: _editionController,
                   label: 'Edition (Optional)',
@@ -470,14 +284,12 @@ class _SellBookPageState extends State<SellBookPage> {
 
                 const SizedBox(height: 16),
 
-                // Condition
                 _buildTextField(
                   controller: _conditionController,
                   label: 'Condition',
                   hint: 'e.g., Used - Good, Unused but old, Like new',
                   icon: Icons.star_rounded,
                   isRequired: true,
-                  maxLines: 2,
                 ),
 
                 const SizedBox(height: 24),
@@ -515,7 +327,6 @@ class _SellBookPageState extends State<SellBookPage> {
 
                 const SizedBox(height: 16),
 
-                // Additional Notes
                 _buildTextField(
                   controller: _additionalNotesController,
                   label: 'Additional Notes (Optional)',
@@ -549,7 +360,7 @@ class _SellBookPageState extends State<SellBookPage> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'Boipara charges 10-15% commission after successful sale. No COD available - payment will be sent via your selected method.',
+                          'Boipara charges 10-15% commission after successful sale.',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey[600],
@@ -577,21 +388,21 @@ class _SellBookPageState extends State<SellBookPage> {
                     ),
                     child: _isSubmitting
                         ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          )
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
                         : const Text(
-                            'Submit Book for Sale',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
+                      'Submit Book for Sale',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
                   ),
                 ),
 
@@ -692,7 +503,7 @@ class _SellBookPageState extends State<SellBookPage> {
                 const SizedBox(width: 12),
                 const Expanded(
                   child: Text(
-                    'I agree to receive payment through mobile banking, bank account, or debit/credit card. Cash on Delivery (COD) is not available.',
+                    'I agree to receive payment through mobile banking or bank account.',
                     style: TextStyle(
                       fontSize: 13,
                       color: Color(0xFF333333),
@@ -707,7 +518,6 @@ class _SellBookPageState extends State<SellBookPage> {
           if (_acceptedPaymentTerms) ...[
             const SizedBox(height: 16),
 
-            // Payment Method Options
             _buildPaymentOption(
               title: 'Mobile Banking',
               subtitle: 'bKash, Nagad, Upay',
@@ -721,28 +531,10 @@ class _SellBookPageState extends State<SellBookPage> {
               icon: Icons.account_balance_rounded,
               value: 'bank_account',
             ),
-            const SizedBox(height: 10),
-            _buildPaymentOption(
-              title: 'Debit/Credit Card',
-              subtitle: 'Visa, Mastercard',
-              icon: Icons.credit_card_rounded,
-              value: 'card',
-            ),
 
-            // Show details based on selection
             if (_selectedPaymentMethod == 'mobile_banking') ...[
               const SizedBox(height: 16),
               _buildMobileBankingDetails(),
-            ],
-
-            if (_selectedPaymentMethod == 'bank_account') ...[
-              const SizedBox(height: 16),
-              _buildBankAccountDetails(),
-            ],
-
-            if (_selectedPaymentMethod == 'card') ...[
-              const SizedBox(height: 16),
-              _buildCardDetails(),
             ],
           ],
         ],
@@ -904,259 +696,6 @@ class _SellBookPageState extends State<SellBookPage> {
                 borderSide: const BorderSide(color: darkBrown, width: 2),
               ),
             ),
-            validator: (value) {
-              if (_selectedPaymentMethod == 'mobile_banking') {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Mobile number is required';
-                }
-                if (value.length < 11) {
-                  return 'Enter a valid mobile number';
-                }
-              }
-              return null;
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBankAccountDetails() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Bank Account Details',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF333333),
-            ),
-          ),
-          const SizedBox(height: 12),
-          // Bank Selection Dropdown
-          DropdownButtonFormField<String>(
-            value: _selectedBank,
-            decoration: InputDecoration(
-              labelText: 'Select Bank',
-              prefixIcon: const Icon(Icons.account_balance, color: darkBrown),
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: darkBrown, width: 2),
-              ),
-            ),
-            items: _bankOptions.map((bank) {
-              return DropdownMenuItem(
-                value: bank,
-                child: Text(
-                  bank,
-                  style: const TextStyle(fontSize: 14),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              );
-            }).toList(),
-            onChanged: (value) {
-              setState(() {
-                _selectedBank = value;
-              });
-            },
-            validator: (value) {
-              if (_selectedPaymentMethod == 'bank_account' && value == null) {
-                return 'Please select a bank';
-              }
-              return null;
-            },
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _accountHolderNameController,
-            decoration: InputDecoration(
-              labelText: 'Account Holder Name',
-              hintText: 'As per bank records',
-              prefixIcon: const Icon(Icons.person_outline, color: darkBrown),
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: darkBrown, width: 2),
-              ),
-            ),
-            validator: (value) {
-              if (_selectedPaymentMethod == 'bank_account') {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Account holder name is required';
-                }
-              }
-              return null;
-            },
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _accountNumberController,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              labelText: 'Account Number',
-              hintText: 'Enter your bank account number',
-              prefixIcon: const Icon(Icons.numbers, color: darkBrown),
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: darkBrown, width: 2),
-              ),
-            ),
-            validator: (value) {
-              if (_selectedPaymentMethod == 'bank_account') {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Account number is required';
-                }
-              }
-              return null;
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCardDetails() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Card Details',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF333333),
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _accountHolderNameController,
-            decoration: InputDecoration(
-              labelText: 'Cardholder Name',
-              hintText: 'Name on card',
-              prefixIcon: const Icon(Icons.person_outline, color: darkBrown),
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: darkBrown, width: 2),
-              ),
-            ),
-            validator: (value) {
-              if (_selectedPaymentMethod == 'card') {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Cardholder name is required';
-                }
-              }
-              return null;
-            },
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _cardNumberController,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              labelText: 'Card Number',
-              hintText: 'XXXX XXXX XXXX XXXX',
-              prefixIcon: const Icon(Icons.credit_card, color: darkBrown),
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: darkBrown, width: 2),
-              ),
-            ),
-            validator: (value) {
-              if (_selectedPaymentMethod == 'card') {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Card number is required';
-                }
-                if (value.replaceAll(' ', '').length < 16) {
-                  return 'Enter a valid card number';
-                }
-              }
-              return null;
-            },
-          ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.blue.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.security, color: Colors.blue[700], size: 18),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Your card details are encrypted and secure',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.blue[700],
-                    ),
-                  ),
-                ),
-              ],
-            ),
           ),
         ],
       ),
@@ -1171,13 +710,12 @@ class _SellBookPageState extends State<SellBookPage> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 32),
         decoration: BoxDecoration(
           color: darkBrown.withOpacity(0.1),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: darkBrown.withOpacity(0.3),
-            style: BorderStyle.solid,
           ),
         ),
         child: Column(
@@ -1185,15 +723,14 @@ class _SellBookPageState extends State<SellBookPage> {
             Icon(
               icon,
               color: darkBrown,
-              size: 28,
+              size: 32,
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 8),
             Text(
               label,
               style: const TextStyle(
                 color: darkBrown,
                 fontWeight: FontWeight.w600,
-                fontSize: 12,
               ),
             ),
           ],
@@ -1276,11 +813,11 @@ class _SellBookPageState extends State<SellBookPage> {
           ),
           validator: isRequired
               ? (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'This field is required';
-                  }
-                  return null;
-                }
+            if (value == null || value.trim().isEmpty) {
+              return 'This field is required';
+            }
+            return null;
+          }
               : null,
         ),
       ],
