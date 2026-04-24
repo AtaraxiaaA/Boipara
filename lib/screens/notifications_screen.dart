@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'buy_books_screen.dart'; // ← for BookDetailScreen navigation
+import 'buy_books_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -22,6 +22,96 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       .collection('users')
       .doc(_uid)
       .collection('notifications');
+
+  // ── Status system ─────────────────────────────────────────────────────
+  static const _statusOrder = [
+    'ordered',
+    'packaging',
+    'picked_up',
+    'out_for_delivery',
+    'delivered',
+  ];
+
+  static const _statusLabels = {
+    'ordered': 'Order Placed',
+    'packaging': 'Packaging',
+    'picked_up': 'Picked Up',
+    'out_for_delivery': 'Out for Delivery',
+    'delivered': 'Delivered',
+  };
+
+  static const _statusColors = {
+    'ordered': Color(0xFF0E7490),
+    'packaging': Color(0xFFB45309),
+    'picked_up': Color(0xFF7C3AED),
+    'out_for_delivery': Color(0xFF0E7490),
+    'delivered': Color(0xFF059669),
+  };
+
+  static const _statusIcons = {
+    'ordered': Icons.receipt_long_rounded,
+    'packaging': Icons.inventory_2_rounded,
+    'picked_up': Icons.handshake_rounded,
+    'out_for_delivery': Icons.local_shipping_rounded,
+    'delivered': Icons.check_circle_rounded,
+  };
+
+  // Next action labels for seller to tap
+  static const _nextActions = {
+    'ordered': 'Start Packaging',
+    'packaging': 'Mark as Picked Up',
+    'picked_up': 'Send Out for Delivery',
+    'out_for_delivery': 'Mark as Delivered',
+    'delivered': null, // final state
+  };
+
+  String _nextStatus(String current) {
+    final i = _statusOrder.indexOf(current);
+    return i >= 0 && i < _statusOrder.length - 1
+        ? _statusOrder[i + 1]
+        : current;
+  }
+
+  // ── Update order status ───────────────────────────────────────────────
+  Future<void> _updateOrderStatus(String bookId, String newStatus) async {
+    try {
+      // Find order by bookId + sellerId
+      final snap = await FirebaseFirestore.instance
+          .collection('orders')
+          .where('bookId', isEqualTo: bookId)
+          .where('sellerId', isEqualTo: _uid)
+          .limit(1)
+          .get();
+
+      if (snap.docs.isEmpty) {
+        _showSnack('Order not found', Colors.redAccent);
+        return;
+      }
+
+      await snap.docs.first.reference.update({'status': newStatus});
+      _showSnack(
+        'Status updated: ${_statusLabels[newStatus]}',
+        _statusColors[newStatus] ?? brown,
+      );
+    } catch (e) {
+      _showSnack('Failed to update status', Colors.redAccent);
+    }
+  }
+
+  // ── Get live order status ─────────────────────────────────────────────
+  Stream<String>? _orderStatusStream(String bookId) {
+    if (bookId.isEmpty) return null;
+    return FirebaseFirestore.instance
+        .collection('orders')
+        .where('bookId', isEqualTo: bookId)
+        .where('sellerId', isEqualTo: _uid)
+        .limit(1)
+        .snapshots()
+        .map((snap) {
+          if (snap.docs.isEmpty) return 'ordered';
+          return (snap.docs.first.data()['status'] as String?) ?? 'ordered';
+        });
+  }
 
   Future<void> _markAllRead() async {
     final snapshot = await _notifRef.where('isRead', isEqualTo: false).get();
@@ -64,72 +154,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
-  // ── Navigate to BookDetailScreen for Q&A ────────────────────────────────
-  // Fetches the book from Firestore then opens BookDetailScreen directly.
-  // The Q&A section is always visible there so user can read & reply.
-  Future<void> _goToBookQA(Map<String, dynamic> notifData, String docId) async {
-    await _markRead(docId);
-
-    final bookId = notifData['bookId'] ?? '';
-    if (bookId.isEmpty) {
-      _showSnack('Book not found', Colors.redAccent);
-      return;
-    }
-
-    // Show loading indicator
-    if (!mounted) return;
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) =>
-          const Center(child: CircularProgressIndicator(color: brown)),
-    );
-
-    try {
-      // Fetch full book data from Firestore
-      final bookDoc = await FirebaseFirestore.instance
-          .collection('books')
-          .doc(bookId)
-          .get();
-
-      if (!mounted) return;
-      Navigator.pop(context); // close loading
-
-      if (!bookDoc.exists) {
-        _showSnack('This book listing no longer exists', Colors.orange);
-        return;
-      }
-
-      final bookData = bookDoc.data()!;
-      bookData['id'] = bookDoc.id;
-
-      // Fetch seller info
-      try {
-        final sellerDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(bookData['sellerId'])
-            .get();
-        bookData['sellerName'] = sellerDoc.data()?['username'] ?? 'Unknown';
-        bookData['sellerPhoto'] = sellerDoc.data()?['profilePhoto'] ?? '';
-      } catch (_) {
-        bookData['sellerName'] = 'Unknown';
-        bookData['sellerPhoto'] = '';
-      }
-
-      // Navigate to BookDetailScreen — Q&A section is visible there
-      if (!mounted) return;
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => BookDetailScreen(book: bookData)),
-      );
-    } catch (e) {
-      if (mounted) {
-        Navigator.pop(context); // close loading if still open
-        _showSnack('Failed to open book. Try again.', Colors.redAccent);
-      }
-    }
-  }
-
   void _showSnack(String msg, Color c) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -141,21 +165,74 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
-  // ── Order detail sheet ────────────────────────────────────────────────
+  // ── Navigate to BookDetailScreen Q&A ──────────────────────────────────
+  Future<void> _goToBookQA(Map<String, dynamic> notifData, String docId) async {
+    await _markRead(docId);
+    final bookId = notifData['bookId'] ?? '';
+    if (bookId.isEmpty) {
+      _showSnack('Book not found', Colors.redAccent);
+      return;
+    }
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) =>
+          const Center(child: CircularProgressIndicator(color: brown)),
+    );
+    try {
+      final bookDoc = await FirebaseFirestore.instance
+          .collection('books')
+          .doc(bookId)
+          .get();
+      if (!mounted) return;
+      Navigator.pop(context);
+      if (!bookDoc.exists) {
+        _showSnack('Listing no longer exists', Colors.orange);
+        return;
+      }
+      final bookData = bookDoc.data()!;
+      bookData['id'] = bookDoc.id;
+      try {
+        final sd = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(bookData['sellerId'])
+            .get();
+        bookData['sellerName'] = sd.data()?['username'] ?? 'Unknown';
+        bookData['sellerPhoto'] = sd.data()?['profilePhoto'] ?? '';
+      } catch (_) {
+        bookData['sellerName'] = 'Unknown';
+        bookData['sellerPhoto'] = '';
+      }
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => BookDetailScreen(book: bookData)),
+      );
+    } catch (_) {
+      if (mounted) {
+        Navigator.pop(context);
+        _showSnack('Failed to open. Try again.', Colors.redAccent);
+      }
+    }
+  }
+
+  // ── Order detail sheet WITH seller management ─────────────────────────
   void _showOrderDetails(Map<String, dynamic> data, String docId) async {
     await _markRead(docId);
     final addr = data['deliveryAddress'] as Map<String, dynamic>?;
+    final bookId = data['bookId'] ?? '';
     if (!mounted) return;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.85,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.92,
         minChildSize: 0.5,
-        maxChildSize: 0.95,
-        builder: (context, scrollController) => Container(
+        maxChildSize: 0.96,
+        builder: (ctx, scrollController) => Container(
           decoration: const BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -165,7 +242,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header
+                // ── Header ─────────────────────────────────────────────
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
@@ -241,6 +318,234 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // ── SELLER STATUS MANAGEMENT ────────────────────────
+                      if (bookId.isNotEmpty)
+                        StreamBuilder<String>(
+                          stream: _orderStatusStream(bookId),
+                          builder: (context, statusSnap) {
+                            final status = statusSnap.data ?? 'ordered';
+                            final statusLabel = _statusLabels[status] ?? status;
+                            final statusColor = _statusColors[status] ?? brown;
+                            final statusIcon =
+                                _statusIcons[status] ?? Icons.circle;
+                            final nextAction = _nextActions[status];
+                            final nextSt = _nextStatus(status);
+                            final isDelivered = status == 'delivered';
+
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Section title
+                                Row(
+                                  children: [
+                                    Container(
+                                      width: 4,
+                                      height: 18,
+                                      decoration: BoxDecoration(
+                                        color: statusColor,
+                                        borderRadius: BorderRadius.circular(2),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    const Text(
+                                      '📦 Order Status',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                        color: brown,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+
+                                // Current status card
+                                Container(
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: statusColor.withValues(alpha: 0.07),
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: statusColor.withValues(
+                                        alpha: 0.25,
+                                      ),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(10),
+                                        decoration: BoxDecoration(
+                                          color: statusColor.withValues(
+                                            alpha: 0.15,
+                                          ),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Icon(
+                                          statusIcon,
+                                          color: statusColor,
+                                          size: 22,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              statusLabel,
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 15,
+                                                color: statusColor,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              isDelivered
+                                                  ? 'Order complete ✅'
+                                                  : 'Update status when ready',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.grey.shade600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      if (statusSnap.connectionState ==
+                                          ConnectionState.active)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 3,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: const Color(
+                                              0xFF059669,
+                                            ).withValues(alpha: 0.1),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                          ),
+                                          child: const Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                Icons.circle,
+                                                size: 6,
+                                                color: Color(0xFF059669),
+                                              ),
+                                              SizedBox(width: 4),
+                                              Text(
+                                                'Live',
+                                                style: TextStyle(
+                                                  fontSize: 9,
+                                                  color: Color(0xFF059669),
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+
+                                // Progress steps
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: List.generate(_statusOrder.length, (
+                                    i,
+                                  ) {
+                                    final stepStatus = _statusOrder[i];
+                                    final stepColor =
+                                        _statusColors[stepStatus] ??
+                                        Colors.grey;
+                                    final isDone =
+                                        _statusOrder.indexOf(status) >= i;
+                                    return Expanded(
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            child: Container(
+                                              height: 4,
+                                              decoration: BoxDecoration(
+                                                color: isDone
+                                                    ? stepColor
+                                                    : Colors.grey.shade200,
+                                                borderRadius:
+                                                    BorderRadius.circular(2),
+                                              ),
+                                            ),
+                                          ),
+                                          if (i < _statusOrder.length - 1)
+                                            const SizedBox(width: 2),
+                                        ],
+                                      ),
+                                    );
+                                  }),
+                                ),
+
+                                // Next action button
+                                if (nextAction != null) ...[
+                                  const SizedBox(height: 14),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: ElevatedButton.icon(
+                                      onPressed: () {
+                                        Navigator.pop(ctx);
+                                        _updateOrderStatus(bookId, nextSt);
+                                      },
+                                      icon: Icon(
+                                        _statusIcons[nextSt] ??
+                                            Icons.arrow_forward,
+                                        color: Colors.white,
+                                        size: 18,
+                                      ),
+                                      label: Text(
+                                        nextAction,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor:
+                                            _statusColors[nextSt] ?? brown,
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 14,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        elevation: 2,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Center(
+                                    child: Text(
+                                      'Buyer will see this update instantly',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.grey.shade400,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+
+                                const SizedBox(height: 20),
+                              ],
+                            );
+                          },
+                        ),
+
+                      // ── Book Details ────────────────────────────────────
                       _sectionHeader('📚 Book Details', accentOrange),
                       const SizedBox(height: 10),
                       _detailsCard([
@@ -279,6 +584,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                           data['buyerName'] ?? '-',
                           Icons.person_rounded,
                         ),
+                        if ((data['buyerPhone'] ?? '').toString().isNotEmpty)
+                          _detailRow(
+                            'Buyer Phone',
+                            data['buyerPhone'],
+                            Icons.phone_rounded,
+                            highlight: true,
+                            copyable: true,
+                            onCopy: () => _copyToClipboard(
+                              data['buyerPhone'] ?? '',
+                              'Phone',
+                            ),
+                          ),
                         _detailRow(
                           'Payment Method',
                           data['paymentMethod'] ?? '-',
@@ -315,7 +632,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               const SizedBox(width: 10),
                               const Expanded(
                                 child: Text(
-                                  'No delivery address was saved with this order.',
+                                  'No delivery address saved with this order.',
                                   style: TextStyle(
                                     fontSize: 13,
                                     color: Colors.black87,
@@ -350,10 +667,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               addr['backup1'],
                               Icons.phone_callback_outlined,
                               copyable: true,
-                              onCopy: () => _copyToClipboard(
-                                addr['backup1'],
-                                'Backup phone',
-                              ),
+                              onCopy: () =>
+                                  _copyToClipboard(addr['backup1'], 'Backup'),
                             ),
                           if ((addr['backup2'] ?? '').toString().isNotEmpty)
                             _detailRow(
@@ -361,10 +676,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               addr['backup2'],
                               Icons.phone_callback_outlined,
                               copyable: true,
-                              onCopy: () => _copyToClipboard(
-                                addr['backup2'],
-                                'Backup phone',
-                              ),
+                              onCopy: () =>
+                                  _copyToClipboard(addr['backup2'], 'Backup'),
                             ),
                           _detailRow(
                             'Street',
@@ -401,13 +714,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
                       if (addr != null &&
                           (addr['name'] ?? '').toString().isNotEmpty) ...[
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 16),
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton.icon(
                             onPressed: () {
                               final fullAddr =
-                                  '${addr['name']}\n${addr['phone']}${(addr['backup1'] ?? '').isNotEmpty ? '\n${addr['backup1']}' : ''}${(addr['backup2'] ?? '').isNotEmpty ? '\n${addr['backup2']}' : ''}\n${addr['street']}, ${addr['upazila']}, ${addr['district']}, ${addr['division']}${(addr['postalCode'] ?? '').isNotEmpty ? ' - ${addr['postalCode']}' : ''}';
+                                  '${addr['name']}\n${addr['phone']}'
+                                  '${(addr['backup1'] ?? '').isNotEmpty ? '\n${addr['backup1']}' : ''}'
+                                  '${(addr['backup2'] ?? '').isNotEmpty ? '\n${addr['backup2']}' : ''}'
+                                  '\n${addr['street']}, ${addr['upazila']}, ${addr['district']}, ${addr['division']}'
+                                  '${(addr['postalCode'] ?? '').isNotEmpty ? ' - ${addr['postalCode']}' : ''}';
                               _copyToClipboard(fullAddr, 'Full address');
                             },
                             icon: const Icon(
@@ -431,13 +748,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 10),
                       ],
 
+                      const SizedBox(height: 14),
                       SizedBox(
                         width: double.infinity,
                         child: OutlinedButton(
-                          onPressed: () => Navigator.pop(context),
+                          onPressed: () => Navigator.pop(ctx),
                           style: OutlinedButton.styleFrom(
                             side: BorderSide(color: Colors.grey.shade300),
                             padding: const EdgeInsets.symmetric(vertical: 14),
@@ -466,7 +783,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
-  // ── Config per notification type ──────────────────────────────────────
+  // ── Helpers ───────────────────────────────────────────────────────────
   IconData _iconFor(String type) {
     switch (type) {
       case 'new_order':
@@ -496,7 +813,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   String _tapHintFor(String type) {
     switch (type) {
       case 'new_order':
-        return 'Tap for full delivery details';
+        return 'Tap to manage order & update status';
       case 'new_question':
         return 'Tap to view & answer the question';
       case 'new_answer':
@@ -617,9 +934,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator(color: brown));
           }
-
           final docs = snapshot.data?.docs ?? [];
-
           if (docs.isEmpty) {
             return Center(
               child: Column(
@@ -690,7 +1005,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     if (type == 'new_order') {
                       _showOrderDetails(data, docId);
                     } else if (type == 'new_question' || type == 'new_answer') {
-                      // ✅ Navigate directly to BookDetailScreen Q&A section
                       _goToBookQA(data, docId);
                     } else {
                       _markRead(docId);
@@ -722,7 +1036,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Icon
                           Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
@@ -776,9 +1089,57 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                   ),
                                 ),
 
-                                // Preview chips
+                                // Order: show status + payment preview chips
                                 if (type == 'new_order') ...[
                                   const SizedBox(height: 8),
+                                  // Live status badge
+                                  if ((data['bookId'] ?? '').isNotEmpty)
+                                    StreamBuilder<String>(
+                                      stream: _orderStatusStream(
+                                        data['bookId'],
+                                      ),
+                                      builder: (_, statusSnap) {
+                                        final s = statusSnap.data ?? 'ordered';
+                                        final sc =
+                                            _statusColors[s] ?? Colors.grey;
+                                        final sl = _statusLabels[s] ?? s;
+                                        return Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 4,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: sc.withValues(alpha: 0.1),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                            border: Border.all(
+                                              color: sc.withValues(alpha: 0.3),
+                                            ),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                Icons.circle,
+                                                size: 7,
+                                                color: sc,
+                                              ),
+                                              const SizedBox(width: 5),
+                                              Text(
+                                                sl,
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: sc,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  const SizedBox(height: 6),
                                   Wrap(
                                     spacing: 6,
                                     runSpacing: 4,
@@ -810,7 +1171,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                   ),
                                 ],
 
-                                // Book name chip for Q&A
+                                // Q&A previews
                                 if (type == 'new_question' ||
                                     type == 'new_answer') ...[
                                   const SizedBox(height: 8),
@@ -821,8 +1182,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                       Icons.book_outlined,
                                       data['bookName'],
                                     ),
-
-                                  // Show question preview
                                   if ((data['question'] ?? '')
                                       .toString()
                                       .isNotEmpty) ...[
@@ -848,8 +1207,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                       ),
                                     ),
                                   ],
-
-                                  // Show answer preview for new_answer
                                   if (type == 'new_answer' &&
                                       (data['answer'] ?? '')
                                           .toString()
@@ -870,7 +1227,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                       ),
                                       child: Row(
                                         children: [
-                                          // Seller badge if applicable
                                           if (data['isSeller'] == true) ...[
                                             Container(
                                               padding:
@@ -912,7 +1268,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                 ],
 
                                 const SizedBox(height: 8),
-                                // Tap hint
                                 Container(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 10,
@@ -942,7 +1297,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                     ],
                                   ),
                                 ),
-
                                 const SizedBox(height: 6),
                                 Text(
                                   _timeAgo(data['createdAt']),
@@ -994,7 +1348,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 }
 
-// ── Notification Badge Widget ──────────────────────────────────────────────
+// ── Notification Badge Widget ─────────────────────────────────────────────────
 class NotificationBadge extends StatelessWidget {
   final Widget child;
   const NotificationBadge({super.key, required this.child});
