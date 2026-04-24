@@ -268,9 +268,9 @@ class _ProfilePageState extends State<ProfilePage> {
                           ),
                         ),
                         _buildMenuItem(
-                          icon: Icons.favorite_rounded,
-                          title: 'Wishlist',
-                          subtitle: 'Books you\'re interested in',
+                          icon: Icons.shopping_cart_rounded,
+                          title: 'My Cart',
+                          subtitle: 'Books you added to cart',
                           onTap: () => Navigator.push(
                             context,
                             MaterialPageRoute(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'buy_books_screen.dart'; // ← for BookDetailScreen navigation
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -63,11 +64,87 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
-  void _showOrderDetails(Map<String, dynamic> data, String docId) async {
+  // ── Navigate to BookDetailScreen for Q&A ────────────────────────────────
+  // Fetches the book from Firestore then opens BookDetailScreen directly.
+  // The Q&A section is always visible there so user can read & reply.
+  Future<void> _goToBookQA(Map<String, dynamic> notifData, String docId) async {
     await _markRead(docId);
 
-    final addr = data['deliveryAddress'] as Map<String, dynamic>?;
+    final bookId = notifData['bookId'] ?? '';
+    if (bookId.isEmpty) {
+      _showSnack('Book not found', Colors.redAccent);
+      return;
+    }
 
+    // Show loading indicator
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) =>
+          const Center(child: CircularProgressIndicator(color: brown)),
+    );
+
+    try {
+      // Fetch full book data from Firestore
+      final bookDoc = await FirebaseFirestore.instance
+          .collection('books')
+          .doc(bookId)
+          .get();
+
+      if (!mounted) return;
+      Navigator.pop(context); // close loading
+
+      if (!bookDoc.exists) {
+        _showSnack('This book listing no longer exists', Colors.orange);
+        return;
+      }
+
+      final bookData = bookDoc.data()!;
+      bookData['id'] = bookDoc.id;
+
+      // Fetch seller info
+      try {
+        final sellerDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(bookData['sellerId'])
+            .get();
+        bookData['sellerName'] = sellerDoc.data()?['username'] ?? 'Unknown';
+        bookData['sellerPhoto'] = sellerDoc.data()?['profilePhoto'] ?? '';
+      } catch (_) {
+        bookData['sellerName'] = 'Unknown';
+        bookData['sellerPhoto'] = '';
+      }
+
+      // Navigate to BookDetailScreen — Q&A section is visible there
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => BookDetailScreen(book: bookData)),
+      );
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // close loading if still open
+        _showSnack('Failed to open book. Try again.', Colors.redAccent);
+      }
+    }
+  }
+
+  void _showSnack(String msg, Color c) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: c,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
+  // ── Order detail sheet ────────────────────────────────────────────────
+  void _showOrderDetails(Map<String, dynamic> data, String docId) async {
+    await _markRead(docId);
+    final addr = data['deliveryAddress'] as Map<String, dynamic>?;
     if (!mounted) return;
 
     showModalBottomSheet(
@@ -88,7 +165,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Handle + header
+                // Header
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
@@ -164,7 +241,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // ── Book Details ───────────────────────────────
                       _sectionHeader('📚 Book Details', accentOrange),
                       const SizedBox(height: 10),
                       _detailsCard([
@@ -192,8 +268,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       ]),
 
                       const SizedBox(height: 20),
-
-                      // ── Buyer Details ──────────────────────────────
                       _sectionHeader(
                         '👤 Buyer Details',
                         const Color(0xFF0E7490),
@@ -214,8 +288,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       ]),
 
                       const SizedBox(height: 20),
-
-                      // ── Delivery Address ───────────────────────────
                       _sectionHeader(
                         '📍 Delivery Address',
                         const Color(0xFF059669),
@@ -243,7 +315,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               const SizedBox(width: 10),
                               const Expanded(
                                 child: Text(
-                                  'No delivery address was saved with this order. Contact the buyer directly.',
+                                  'No delivery address was saved with this order.',
                                   style: TextStyle(
                                     fontSize: 13,
                                     color: Colors.black87,
@@ -256,14 +328,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       else
                         _detailsCard([
                           _detailRow(
-                            'Recipient Name',
+                            'Recipient',
                             addr['name'] ?? '-',
                             Icons.person_outline,
                             copyable: true,
-                            onCopy: () => _copyToClipboard(
-                              addr['name'] ?? '',
-                              'Recipient name',
-                            ),
+                            onCopy: () =>
+                                _copyToClipboard(addr['name'] ?? '', 'Name'),
                           ),
                           _detailRow(
                             'Phone',
@@ -276,28 +346,28 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                           ),
                           if ((addr['backup1'] ?? '').toString().isNotEmpty)
                             _detailRow(
-                              'Backup Phone 1',
+                              'Backup 1',
                               addr['backup1'],
                               Icons.phone_callback_outlined,
                               copyable: true,
                               onCopy: () => _copyToClipboard(
                                 addr['backup1'],
-                                'Backup phone 1',
+                                'Backup phone',
                               ),
                             ),
                           if ((addr['backup2'] ?? '').toString().isNotEmpty)
                             _detailRow(
-                              'Backup Phone 2',
+                              'Backup 2',
                               addr['backup2'],
                               Icons.phone_callback_outlined,
                               copyable: true,
                               onCopy: () => _copyToClipboard(
                                 addr['backup2'],
-                                'Backup phone 2',
+                                'Backup phone',
                               ),
                             ),
                           _detailRow(
-                            'Street / House',
+                            'Street',
                             addr['street'] ?? '-',
                             Icons.home_outlined,
                             copyable: true,
@@ -307,7 +377,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             ),
                           ),
                           _detailRow(
-                            'Upazila / Thana',
+                            'Upazila',
                             addr['upazila'] ?? '-',
                             Icons.place_outlined,
                           ),
@@ -329,19 +399,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             ),
                         ]),
 
-                      const SizedBox(height: 20),
-
-                      // ── Copy full address button ───────────────────
                       if (addr != null &&
                           (addr['name'] ?? '').toString().isNotEmpty) ...[
+                        const SizedBox(height: 20),
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton.icon(
                             onPressed: () {
                               final fullAddr =
-                                  '''${addr['name']}
-${addr['phone']}${(addr['backup1'] ?? '').isNotEmpty ? '\n${addr['backup1']}' : ''}${(addr['backup2'] ?? '').isNotEmpty ? '\n${addr['backup2']}' : ''}
-${addr['street']}, ${addr['upazila']}, ${addr['district']}, ${addr['division']}${(addr['postalCode'] ?? '').isNotEmpty ? ' - ${addr['postalCode']}' : ''}''';
+                                  '${addr['name']}\n${addr['phone']}${(addr['backup1'] ?? '').isNotEmpty ? '\n${addr['backup1']}' : ''}${(addr['backup2'] ?? '').isNotEmpty ? '\n${addr['backup2']}' : ''}\n${addr['street']}, ${addr['upazila']}, ${addr['district']}, ${addr['division']}${(addr['postalCode'] ?? '').isNotEmpty ? ' - ${addr['postalCode']}' : ''}';
                               _copyToClipboard(fullAddr, 'Full address');
                             },
                             icon: const Icon(
@@ -398,6 +464,46 @@ ${addr['street']}, ${addr['upazila']}, ${addr['district']}, ${addr['division']}$
         ),
       ),
     );
+  }
+
+  // ── Config per notification type ──────────────────────────────────────
+  IconData _iconFor(String type) {
+    switch (type) {
+      case 'new_order':
+        return Icons.shopping_bag_rounded;
+      case 'new_question':
+        return Icons.help_outline_rounded;
+      case 'new_answer':
+        return Icons.chat_bubble_rounded;
+      default:
+        return Icons.notifications_rounded;
+    }
+  }
+
+  Color _colorFor(String type) {
+    switch (type) {
+      case 'new_order':
+        return accentOrange;
+      case 'new_question':
+        return const Color(0xFF0E7490);
+      case 'new_answer':
+        return accentOrange;
+      default:
+        return brown;
+    }
+  }
+
+  String _tapHintFor(String type) {
+    switch (type) {
+      case 'new_order':
+        return 'Tap for full delivery details';
+      case 'new_question':
+        return 'Tap to view & answer the question';
+      case 'new_answer':
+        return 'Tap to view the answer & reply';
+      default:
+        return 'Tap to open';
+    }
   }
 
   Widget _sectionHeader(String title, Color color) {
@@ -537,7 +643,7 @@ ${addr['street']}, ${addr['upazila']}, ${addr['district']}, ${addr['division']}$
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 40),
                     child: Text(
-                      'You\'ll be notified when someone buys your book',
+                      'You\'ll be notified about orders, questions, and answers',
                       style: TextStyle(
                         fontSize: 13,
                         color: Colors.grey.shade400,
@@ -558,8 +664,9 @@ ${addr['street']}, ${addr['upazila']}, ${addr['district']}, ${addr['division']}$
               final data = doc.data() as Map<String, dynamic>;
               final docId = doc.id;
               final isRead = data['isRead'] == true;
-              final isOrder = data['type'] == 'new_order';
+              final type = data['type'] ?? '';
               final addr = data['deliveryAddress'] as Map<String, dynamic>?;
+              final iconColor = _colorFor(type);
 
               return Dismissible(
                 key: Key(docId),
@@ -579,20 +686,27 @@ ${addr['street']}, ${addr['upazila']}, ${addr['district']}, ${addr['division']}$
                 ),
                 onDismissed: (_) => _deleteNotification(docId),
                 child: GestureDetector(
-                  onTap: () => isOrder
-                      ? _showOrderDetails(data, docId)
-                      : _markRead(docId),
+                  onTap: () {
+                    if (type == 'new_order') {
+                      _showOrderDetails(data, docId);
+                    } else if (type == 'new_question' || type == 'new_answer') {
+                      // ✅ Navigate directly to BookDetailScreen Q&A section
+                      _goToBookQA(data, docId);
+                    } else {
+                      _markRead(docId);
+                    }
+                  },
                   child: Container(
                     margin: const EdgeInsets.only(bottom: 10),
                     decoration: BoxDecoration(
                       color: isRead
                           ? Colors.white
-                          : accentOrange.withValues(alpha: 0.04),
+                          : iconColor.withValues(alpha: 0.04),
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
                         color: isRead
                             ? Colors.grey.shade200
-                            : accentOrange.withValues(alpha: 0.35),
+                            : iconColor.withValues(alpha: 0.35),
                         width: isRead ? 1 : 1.5,
                       ),
                       boxShadow: [
@@ -612,16 +726,12 @@ ${addr['street']}, ${addr['upazila']}, ${addr['district']}, ${addr['division']}$
                           Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: isOrder
-                                  ? accentOrange.withValues(alpha: 0.12)
-                                  : brown.withValues(alpha: 0.1),
+                              color: iconColor.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Icon(
-                              isOrder
-                                  ? Icons.shopping_bag_rounded
-                                  : Icons.notifications_rounded,
-                              color: isOrder ? accentOrange : brown,
+                              _iconFor(type),
+                              color: iconColor,
                               size: 22,
                             ),
                           ),
@@ -649,8 +759,8 @@ ${addr['street']}, ${addr['upazila']}, ${addr['district']}, ${addr['division']}$
                                       Container(
                                         width: 8,
                                         height: 8,
-                                        decoration: const BoxDecoration(
-                                          color: accentOrange,
+                                        decoration: BoxDecoration(
+                                          color: iconColor,
                                           shape: BoxShape.circle,
                                         ),
                                       ),
@@ -667,7 +777,7 @@ ${addr['street']}, ${addr['upazila']}, ${addr['district']}, ${addr['division']}$
                                 ),
 
                                 // Preview chips
-                                if (isOrder) ...[
+                                if (type == 'new_order') ...[
                                   const SizedBox(height: 8),
                                   Wrap(
                                     spacing: 6,
@@ -698,39 +808,140 @@ ${addr['street']}, ${addr['upazila']}, ${addr['district']}, ${addr['division']}$
                                         ),
                                     ],
                                   ),
+                                ],
+
+                                // Book name chip for Q&A
+                                if (type == 'new_question' ||
+                                    type == 'new_answer') ...[
                                   const SizedBox(height: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 6,
+                                  if ((data['bookName'] ?? '')
+                                      .toString()
+                                      .isNotEmpty)
+                                    _previewChip(
+                                      Icons.book_outlined,
+                                      data['bookName'],
                                     ),
-                                    decoration: BoxDecoration(
-                                      color: accentOrange.withValues(
-                                        alpha: 0.08,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          Icons.arrow_forward_ios_rounded,
-                                          size: 11,
-                                          color: accentOrange,
+
+                                  // Show question preview
+                                  if ((data['question'] ?? '')
+                                      .toString()
+                                      .isNotEmpty) ...[
+                                    const SizedBox(height: 6),
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey.shade50,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: Colors.grey.shade200,
                                         ),
-                                        const SizedBox(width: 5),
-                                        const Text(
-                                          'Tap for full delivery details',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: accentOrange,
-                                            fontWeight: FontWeight.w600,
+                                      ),
+                                      child: Text(
+                                        '"${data['question']}"',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.grey.shade500,
+                                          fontStyle: FontStyle.italic,
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+
+                                  // Show answer preview for new_answer
+                                  if (type == 'new_answer' &&
+                                      (data['answer'] ?? '')
+                                          .toString()
+                                          .isNotEmpty) ...[
+                                    const SizedBox(height: 4),
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: accentOrange.withValues(
+                                          alpha: 0.06,
+                                        ),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: accentOrange.withValues(
+                                            alpha: 0.2,
                                           ),
                                         ),
-                                      ],
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          // Seller badge if applicable
+                                          if (data['isSeller'] == true) ...[
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 5,
+                                                    vertical: 2,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: accentOrange,
+                                                borderRadius:
+                                                    BorderRadius.circular(6),
+                                              ),
+                                              child: const Text(
+                                                'Seller',
+                                                style: TextStyle(
+                                                  fontSize: 9,
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 6),
+                                          ],
+                                          Expanded(
+                                            child: Text(
+                                              data['answer'],
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                color: Colors.grey.shade600,
+                                              ),
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
+                                  ],
                                 ],
+
+                                const SizedBox(height: 8),
+                                // Tap hint
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: iconColor.withValues(alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.arrow_forward_ios_rounded,
+                                        size: 11,
+                                        color: iconColor,
+                                      ),
+                                      const SizedBox(width: 5),
+                                      Text(
+                                        _tapHintFor(type),
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: iconColor,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
 
                                 const SizedBox(height: 6),
                                 Text(
@@ -783,7 +994,7 @@ ${addr['street']}, ${addr['upazila']}, ${addr['district']}, ${addr['division']}$
   }
 }
 
-// ── Notification Badge Widget ──────────────────────────────────────────
+// ── Notification Badge Widget ──────────────────────────────────────────────
 class NotificationBadge extends StatelessWidget {
   final Widget child;
   const NotificationBadge({super.key, required this.child});

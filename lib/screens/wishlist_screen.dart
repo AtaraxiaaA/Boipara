@@ -14,130 +14,99 @@ class _WishlistScreenState extends State<WishlistScreen> {
   static const accentOrange = Color(0xFFE07B39);
   static const backgroundColor = Color(0xFFF5F0E9);
 
-  // Placeholder wishlist — replace with API later
-  final List<Map<String, dynamic>> _wishlist = [
-    {
-      'id': 1,
-      'title': 'The Alchemist',
-      'author': 'Paulo Coelho',
-      'askingPrice': 350,
-      'buyingPrice': 700,
-      'condition': 'Like New',
-      'seller': 'Rafi Ahmed',
-      'location': 'Dhanmondi, Dhaka',
-      'addedDate': 'Mar 8, 2026',
-      'available': true,
-    },
-    {
-      'id': 2,
-      'title': 'Misir Ali Omnibus',
-      'author': 'Humayun Ahmed',
-      'askingPrice': 380,
-      'buyingPrice': 650,
-      'condition': 'Good',
-      'seller': 'Imran Khan',
-      'location': 'Mirpur, Dhaka',
-      'addedDate': 'Mar 6, 2026',
-      'available': true,
-    },
-    {
-      'id': 3,
-      'title': 'Lalsalu',
-      'author': 'Syed Waliullah',
-      'askingPrice': 220,
-      'buyingPrice': 400,
-      'condition': 'Acceptable',
-      'seller': 'Nabil Hossain',
-      'location': 'Uttara, Dhaka',
-      'addedDate': 'Mar 2, 2026',
-      'available': false,
-    },
-    {
-      'id': 4,
-      'title': 'Aranyak',
-      'author': 'Bibhutibhushan Bandyopadhyay',
-      'askingPrice': 260,
-      'buyingPrice': 500,
-      'condition': 'Good',
-      'seller': 'Sadia Rahman',
-      'location': 'Gulshan, Dhaka',
-      'addedDate': 'Feb 28, 2026',
-      'available': true,
-    },
-  ];
+  // Uses the same CartManager singleton from BuyBooksScreen
+  final CartManager _cart = CartManager();
 
-  void _removeFromWishlist(int id) {
-    setState(() => _wishlist.removeWhere((b) => b['id'] == id));
+  void _removeFromCart(String bookId) {
+    setState(() => _cart.remove(bookId));
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Removed from wishlist'),
+      SnackBar(
+        content: const Text('Removed from cart'),
         backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
   }
 
-  Color _conditionColor(String condition) {
-    switch (condition) {
-      case 'Like New':
-        return const Color(0xFF059669);
-      case 'Good':
-        return const Color(0xFF0E7490);
-      case 'Acceptable':
-        return const Color(0xFFB45309);
-      default:
-        return Colors.grey;
-    }
+  void _clearAll() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Clear Cart',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: const Text('Remove all books from your cart?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              setState(() => _cart.items.clear());
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            child: const Text(
+              'Clear All',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _conditionColor(String? c) {
+    final s = (c ?? '').toLowerCase();
+    if (s.contains('new') || s.contains('like')) return const Color(0xFF059669);
+    if (s.contains('good')) return const Color(0xFF0E7490);
+    return const Color(0xFFB45309);
   }
 
   @override
   Widget build(BuildContext context) {
+    final items = _cart.items;
+
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
         backgroundColor: brown,
         foregroundColor: Colors.white,
         elevation: 0,
-        title: const Text(
-          'My Wishlist',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        title: Row(
+          children: [
+            const Text(
+              'My Cart',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+            if (items.isNotEmpty) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: accentOrange,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${items.length}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
         actions: [
-          if (_wishlist.isNotEmpty)
+          if (items.isNotEmpty)
             TextButton(
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    title: const Text(
-                      'Clear Wishlist',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    content: const Text('Remove all books from your wishlist?'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('Cancel'),
-                      ),
-                      ElevatedButton(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          setState(() => _wishlist.clear());
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.redAccent,
-                        ),
-                        child: const Text(
-                          'Clear All',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
+              onPressed: _clearAll,
               child: const Text(
                 'Clear All',
                 style: TextStyle(color: Colors.white70, fontSize: 13),
@@ -145,19 +114,20 @@ class _WishlistScreenState extends State<WishlistScreen> {
             ),
         ],
       ),
-      body: _wishlist.isEmpty
+
+      body: items.isEmpty
           ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(
-                    Icons.favorite_border_rounded,
+                    Icons.shopping_cart_outlined,
                     size: 72,
                     color: Colors.grey.shade300,
                   ),
                   const SizedBox(height: 16),
                   const Text(
-                    'Your wishlist is empty',
+                    'Your cart is empty',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -166,7 +136,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Books you save will appear here',
+                    'Add books from Buy Books screen',
                     style: TextStyle(fontSize: 13, color: Colors.grey.shade400),
                   ),
                   const SizedBox(height: 24),
@@ -174,7 +144,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
                     onPressed: () => Navigator.push(
                       context,
                       MaterialPageRoute(builder: (_) => const BuyBooksScreen()),
-                    ),
+                    ).then((_) => setState(() {})),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: brown,
                       foregroundColor: Colors.white,
@@ -208,7 +178,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        '${_wishlist.length} saved book${_wishlist.length != 1 ? 's' : ''}',
+                        '${items.length} book${items.length != 1 ? 's' : ''} in cart',
                         style: TextStyle(
                           fontSize: 13,
                           color: Colors.grey.shade600,
@@ -216,11 +186,11 @@ class _WishlistScreenState extends State<WishlistScreen> {
                         ),
                       ),
                       Text(
-                        '${_wishlist.where((b) => b['available'] == true).length} available',
+                        'Total: ৳${(_cart.total + items.length * 50).toInt()}',
                         style: const TextStyle(
                           fontSize: 13,
-                          color: Color(0xFF059669),
-                          fontWeight: FontWeight.w600,
+                          color: accentOrange,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     ],
@@ -230,9 +200,74 @@ class _WishlistScreenState extends State<WishlistScreen> {
                 Expanded(
                   child: ListView.builder(
                     padding: const EdgeInsets.all(16),
-                    itemCount: _wishlist.length,
-                    itemBuilder: (context, index) =>
-                        _buildWishlistCard(_wishlist[index]),
+                    itemCount: items.length,
+                    itemBuilder: (_, i) => _buildCartCard(items[i]),
+                  ),
+                ),
+
+                // Bottom checkout bar
+                Container(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.06),
+                        blurRadius: 10,
+                        offset: const Offset(0, -3),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${items.length} book${items.length != 1 ? 's' : ''} · ৳50 delivery each',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
+                          Text(
+                            '৳${(_cart.total + items.length * 50).toInt()}',
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: accentOrange,
+                            ),
+                          ),
+                        ],
+                      ),
+                      ElevatedButton(
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => BookDetailScreen(book: items.first),
+                          ),
+                        ).then((_) => setState(() {})),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: brown,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 14,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          'Checkout',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -240,9 +275,11 @@ class _WishlistScreenState extends State<WishlistScreen> {
     );
   }
 
-  Widget _buildWishlistCard(Map<String, dynamic> book) {
-    final conditionColor = _conditionColor(book['condition']);
-    final isAvailable = book['available'] as bool;
+  Widget _buildCartCard(Map<String, dynamic> book) {
+    final condColor = _conditionColor(book['condition']);
+    final orig = (book['buyingPrice'] as num?)?.toDouble() ?? 0;
+    final ask = (book['askingPrice'] as num?)?.toDouble() ?? 0;
+    final disc = orig > 0 ? (((orig - ask) / orig) * 100).round() : 0;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -258,55 +295,30 @@ class _WishlistScreenState extends State<WishlistScreen> {
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Book cover
-            Stack(
-              children: [
-                Container(
-                  width: 68,
-                  height: 90,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        brown.withValues(alpha: isAvailable ? 0.15 : 0.06),
-                        mediumBrown.withValues(
-                          alpha: isAvailable ? 0.08 : 0.04,
-                        ),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(
-                    Icons.menu_book_rounded,
-                    color: brown.withValues(alpha: isAvailable ? 0.4 : 0.2),
-                    size: 32,
-                  ),
+            Container(
+              width: 68,
+              height: 90,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    brown.withValues(alpha: 0.15),
+                    mediumBrown.withValues(alpha: 0.08),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-                if (!isAvailable)
-                  Positioned.fill(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.6),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          'Sold',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.redAccent,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                Icons.menu_book_rounded,
+                color: brown.withValues(alpha: 0.4),
+                size: 32,
+              ),
             ),
             const SizedBox(width: 14),
 
@@ -315,98 +327,103 @@ class _WishlistScreenState extends State<WishlistScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Title + remove
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
                         child: Text(
-                          book['title'],
-                          style: TextStyle(
+                          book['bookName'] ?? '',
+                          style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 15,
-                            color: isAvailable
-                                ? Colors.black87
-                                : Colors.grey.shade400,
+                            color: Colors.black87,
                           ),
                         ),
                       ),
-                      // Remove button
                       GestureDetector(
-                        onTap: () => _removeFromWishlist(book['id']),
-                        child: Icon(
-                          Icons.favorite_rounded,
-                          color: Colors.redAccent.withValues(alpha: 0.8),
-                          size: 22,
+                        onTap: () => _removeFromCart(book['id'] ?? ''),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.redAccent.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.delete_outline_rounded,
+                            color: Colors.redAccent,
+                            size: 18,
+                          ),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 3),
+
                   Text(
-                    book['author'],
+                    'by ${book['authorName'] ?? ''}',
                     style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
 
-                  // Condition badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: conditionColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      book['condition'],
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: conditionColor,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-
-                  // Price
+                  // Condition + discount badges
                   Row(
                     children: [
-                      Text(
-                        '৳${book['askingPrice']}',
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.bold,
-                          color: isAvailable
-                              ? accentOrange
-                              : Colors.grey.shade400,
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: condColor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          book['condition'] ?? '',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: condColor,
+                          ),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '৳${book['buyingPrice']}',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey.shade400,
-                          decoration: TextDecoration.lineThrough,
+                      if (disc > 0) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.green,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '$disc% OFF',
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
 
-                  // Seller & location
+                  // Seller
                   Row(
                     children: [
                       Icon(
-                        Icons.location_on_outlined,
+                        Icons.person_outline_rounded,
                         size: 13,
                         color: Colors.grey.shade400,
                       ),
                       const SizedBox(width: 3),
                       Expanded(
                         child: Text(
-                          book['location'],
+                          book['sellerName'] ?? '',
                           style: TextStyle(
                             fontSize: 11,
                             color: Colors.grey.shade500,
@@ -416,28 +433,48 @@ class _WishlistScreenState extends State<WishlistScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
 
-                  // Buy button (only if available)
-                  if (isAvailable)
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          // TODO: Connect to backend
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                'Order placed for "${book['title']}"!',
+                  // Price + Buy Now
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (orig > 0)
+                            Text(
+                              '৳${orig.toInt()}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey.shade400,
+                                decoration: TextDecoration.lineThrough,
                               ),
-                              backgroundColor: const Color(0xFF059669),
                             ),
-                          );
-                        },
+                          Text(
+                            '৳${ask.toInt()}',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: accentOrange,
+                            ),
+                          ),
+                        ],
+                      ),
+                      ElevatedButton(
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => BookDetailScreen(book: book),
+                          ),
+                        ).then((_) => setState(() {})),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: brown,
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
@@ -451,16 +488,8 @@ class _WishlistScreenState extends State<WishlistScreen> {
                           ),
                         ),
                       ),
-                    ),
-
-                  if (!isAvailable)
-                    Text(
-                      'This book has been sold',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey.shade400,
-                      ),
-                    ),
+                    ],
+                  ),
                 ],
               ),
             ),

@@ -12,6 +12,7 @@ import 'buy_books_screen.dart';
 import 'track_delivery_screen.dart';
 import 'notifications_screen.dart';
 import 'book_requests_screen.dart';
+//import 'book_detail_screen.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -162,6 +163,18 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
         actions: [
+          // Search / Browse icon
+          IconButton(
+            icon: const Icon(
+              Icons.search_rounded,
+              color: Colors.white,
+              size: 26,
+            ),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const BrowseScreen()),
+            ),
+          ),
           IconButton(
             icon: NotificationBadge(
               child: const Icon(
@@ -260,7 +273,7 @@ class _HomePageState extends State<HomePage> {
             } else if (index == 1) {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const BrowseScreen()),
+                MaterialPageRoute(builder: (_) => const BookRequestsScreen()),
               );
             } else if (index == 2) {
               Navigator.push(
@@ -276,8 +289,9 @@ class _HomePageState extends State<HomePage> {
           },
           type: BottomNavigationBarType.fixed,
           backgroundColor: Colors.white,
-          selectedItemColor: darkBrown,
+          selectedItemColor: accentOrange,
           unselectedItemColor: Colors.grey,
+          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
           elevation: 0,
           items: const [
             BottomNavigationBarItem(
@@ -285,8 +299,8 @@ class _HomePageState extends State<HomePage> {
               label: 'Home',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.search_rounded),
-              label: 'Browse',
+              icon: Icon(Icons.forum_rounded), // 🔥 changed icon
+              label: 'Ask', // 🔥 changed label
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.groups_rounded),
@@ -869,6 +883,8 @@ class _HomePageState extends State<HomePage> {
                     context,
                     MaterialPageRoute(
                       builder: (_) => BookClubPage(
+                        clubId: index.toString(),
+                        icon: club['icon'] as IconData,
                         clubName: club['name'] as String,
                         university: club['university'] as String,
                         color: club['color'] as Color,

@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'payment_methods_screen.dart';
+import 'guest_guard.dart';
 
 class PublishBookPage extends StatefulWidget {
   const PublishBookPage({super.key});
@@ -14,60 +18,94 @@ class _PublishBookPageState extends State<PublishBookPage> {
   final _bookTitleController = TextEditingController();
   final _authorNameController = TextEditingController();
   final _synopsisController = TextEditingController();
-  final _genreController = TextEditingController();
   final _isbnController = TextEditingController();
   final _pageCountController = TextEditingController();
   final _priceController = TextEditingController();
   final _quantityController = TextEditingController();
 
-  // Payment method controllers
-  final _accountHolderNameController = TextEditingController();
-  final _accountNumberController = TextEditingController();
-  final _mobileNumberController = TextEditingController();
-  final _cardNumberController = TextEditingController();
-
   XFile? _coverImage;
   final ImagePicker _picker = ImagePicker();
   bool _isSubmitting = false;
+
+  // Category — must match buy_books_screen filter chips
+  String _selectedCategory = 'Fiction';
+  final _categories = [
+    'Fiction',
+    'Non-Fiction',
+    'Textbook',
+    'Poetry',
+    'Self-Help',
+    'Horror',
+    'History',
+  ];
+
   String _selectedLanguage = 'Bangla';
   String _selectedBinding = 'Paperback';
 
-  // Payment method state
-  bool _acceptedPaymentTerms = false;
-  String? _selectedPaymentMethod;
-  String? _selectedMobileBanking;
-  String? _selectedBank;
+  // Payment
+  List<Map<String, dynamic>> _paymentMethods = [];
+  bool _loadingPayments = true;
+  String? _selectedPaymentId;
 
-  // Theme colors
   static const Color darkBrown = Color(0xFF613613);
   static const Color mediumBrown = Color(0xFF7C4700);
   static const Color lightBrown = Color(0xFF7E481C);
   static const Color accentOrange = Color(0xFFE07B39);
   static const Color backgroundColor = Color(0xFFF5F0E9);
 
-  final List<String> _mobileBankingOptions = ['bKash', 'Nagad', 'Upay'];
-  final List<String> _bankOptions = [
-    'Dutch-Bangla Bank (DBBL)',
-    'BRAC Bank',
-    'Eastern Bank Limited (EBL)',
-    'City Bank',
-    'Prime Bank',
-    'Islami Bank Bangladesh',
-    'Pubali Bank',
-    'Sonali Bank',
-    'Janata Bank',
-    'Agrani Bank',
-    'Rupali Bank',
-    'Standard Chartered Bangladesh',
-    'HSBC Bangladesh',
-    'Bank Asia',
-    'Mutual Trust Bank',
-    'Southeast Bank',
-    'United Commercial Bank',
-    'AB Bank',
-    'NCC Bank',
-    'One Bank',
-  ];
+  final _typeColors = {
+    'bKash': const Color(0xFFE2136E),
+    'Nagad': const Color(0xFFF6921E),
+    'Bank Account': const Color(0xFF1A5276),
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPaymentMethods();
+  }
+
+  @override
+  void dispose() {
+    _bookTitleController.dispose();
+    _authorNameController.dispose();
+    _synopsisController.dispose();
+    _isbnController.dispose();
+    _pageCountController.dispose();
+    _priceController.dispose();
+    _quantityController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadPaymentMethods() async {
+    setState(() => _loadingPayments = true);
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) return;
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('payment_methods')
+          .get();
+      setState(() {
+        _paymentMethods = snapshot.docs.map((doc) {
+          final data = doc.data();
+          data['id'] = doc.id;
+          return data;
+        }).toList();
+        final defaultMethod = _paymentMethods.firstWhere(
+          (m) => m['isDefault'] == true,
+          orElse: () => {},
+        );
+        if (defaultMethod.isNotEmpty) {
+          _selectedPaymentId = defaultMethod['id'];
+        }
+      });
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _loadingPayments = false);
+    }
+  }
 
   Future<void> _pickCoverImage() async {
     try {
@@ -76,168 +114,172 @@ class _PublishBookPageState extends State<PublishBookPage> {
         imageQuality: 90,
         maxWidth: 1200,
       );
-      if (image != null) {
-        setState(() {
-          _coverImage = image;
-        });
-      }
+      if (image != null) setState(() => _coverImage = image);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error picking image: $e'),
-          backgroundColor: Colors.red,
-        ),
+      _showSnack('Error picking image: $e', Colors.red);
+    }
+  }
+
+  void _showSnack(String msg, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
+  Future<void> _submitBook() async {
+    if (showGuestDialog(context)) return;
+    if (!_formKey.currentState!.validate()) return;
+    if (_coverImage == null) {
+      _showSnack('Please add a cover image for your book', Colors.orange);
+      return;
+    }
+    if (_selectedPaymentId == null) {
+      _showSnack('Please select a payment method', Colors.orange);
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+
+      // Fetch seller profile so buy screen shows name/photo immediately
+      String sellerName = 'Unknown';
+      String sellerPhoto = '';
+      try {
+        final ud = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .get();
+        sellerName = ud.data()?['username'] ?? 'Unknown';
+        sellerPhoto = ud.data()?['profilePhoto'] ?? '';
+      } catch (_) {}
+
+      final selectedMethod = _paymentMethods.firstWhere(
+        (m) => m['id'] == _selectedPaymentId,
       );
+
+      await FirebaseFirestore.instance.collection('books').add({
+        // ── Identity ──────────────────────────────────────────────
+        'sellerId': uid,
+        'sellerName': sellerName,
+        'sellerPhoto': sellerPhoto,
+
+        // ── Book info ─────────────────────────────────────────────
+        'bookName': _bookTitleController.text.trim(),
+        'authorName': _authorNameController.text.trim(),
+        'additionalNotes': _synopsisController.text.trim(),
+        'edition': '',
+        'condition': 'Brand New',
+
+        // ── Category — used by buy screen filter chips ────────────
+        'category': _selectedCategory,
+
+        // ── Listing type — 'published' shows in Recently Published row
+        'listingType': 'published',
+
+        // ── Publish-specific fields ───────────────────────────────
+        'isbn': _isbnController.text.trim(),
+        'pageCount': int.tryParse(_pageCountController.text.trim()) ?? 0,
+        'language': _selectedLanguage,
+        'binding': _selectedBinding,
+        'quantity': int.tryParse(_quantityController.text.trim()) ?? 0,
+
+        // ── Pricing (no buyingPrice for new books) ────────────────
+        'buyingPrice': 0,
+        'askingPrice': double.tryParse(_priceController.text.trim()) ?? 0,
+
+        // ── Payment ───────────────────────────────────────────────
+        'paymentMethod': selectedMethod['type'],
+        'paymentNumber': selectedMethod['number'] ?? '',
+        'paymentName': selectedMethod['name'] ?? '',
+
+        // ── Status — admin approves → 'approved' ──────────────────
+        'status': 'pending_review',
+
+        // ── Cover image placeholder (upload when Blaze enabled) ───
+        'images': [],
+
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      setState(() => _isSubmitting = false);
+      if (mounted) _showSuccessDialog();
+    } catch (e) {
+      setState(() => _isSubmitting = false);
+      _showSnack('Failed to submit. Please try again', Colors.red);
     }
   }
 
-  void _submitBook() {
-    if (_formKey.currentState!.validate()) {
-      if (_coverImage == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please add a cover image for your book'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
-
-      if (!_acceptedPaymentTerms) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please accept the payment terms to continue'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
-
-      if (_selectedPaymentMethod == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please select a payment method'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
-
-      // Validate payment details
-      if (_selectedPaymentMethod == 'mobile_banking' &&
-          _selectedMobileBanking == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please select a mobile banking provider'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
-
-      if (_selectedPaymentMethod == 'bank_account' && _selectedBank == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please select your bank'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
-
-      setState(() {
-        _isSubmitting = true;
-      });
-
-      // Simulate API call
-      Future.delayed(const Duration(seconds: 2), () {
-        setState(() {
-          _isSubmitting = false;
-        });
-
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
+  void _showSuccessDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: darkBrown.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.check_circle_rounded,
+                color: darkBrown,
+                size: 48,
+              ),
             ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: darkBrown.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.check_circle_rounded,
-                    color: darkBrown,
-                    size: 48,
+            const SizedBox(height: 16),
+            const Text(
+              'Book Submitted!',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: darkBrown,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Your book has been submitted for review. Our team will verify and list it within 48 hours. Once live it will appear in the "Recently Published" section. Payment will be sent to your selected method after sales.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: Colors.grey, height: 1.5),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.pop(context);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: darkBrown,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Book Submitted!',
+                child: const Text(
+                  'Done',
                   style: TextStyle(
-                    fontSize: 20,
+                    color: Colors.white,
                     fontWeight: FontWeight.bold,
-                    color: darkBrown,
                   ),
                 ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Your book has been submitted for review. Our team will verify and list it within 48 hours. Payment will be sent to your selected method after sales.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 14, color: Colors.grey),
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      Navigator.pop(context);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: darkBrown,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Text(
-                      'Done',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
-        );
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _bookTitleController.dispose();
-    _authorNameController.dispose();
-    _synopsisController.dispose();
-    _genreController.dispose();
-    _isbnController.dispose();
-    _pageCountController.dispose();
-    _priceController.dispose();
-    _quantityController.dispose();
-    _accountHolderNameController.dispose();
-    _accountNumberController.dispose();
-    _mobileNumberController.dispose();
-    _cardNumberController.dispose();
-    super.dispose();
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -265,13 +307,15 @@ class _PublishBookPageState extends State<PublishBookPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header Info
+                // ── Info banner ───────────────────────────────────────
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: mediumBrown.withOpacity(0.1),
+                    color: mediumBrown.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: mediumBrown.withOpacity(0.3)),
+                    border: Border.all(
+                      color: mediumBrown.withValues(alpha: 0.3),
+                    ),
                   ),
                   child: const Row(
                     children: [
@@ -304,20 +348,11 @@ class _PublishBookPageState extends State<PublishBookPage> {
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 24),
 
-                // Book Cover Section
-                const Text(
-                  'Book Cover *',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: darkBrown,
-                  ),
-                ),
+                // ── Cover image ───────────────────────────────────────
+                _sectionTitle('Book Cover *'),
                 const SizedBox(height: 12),
-
                 GestureDetector(
                   onTap: _pickCoverImage,
                   child: Container(
@@ -349,11 +384,8 @@ class _PublishBookPageState extends State<PublishBookPage> {
                                 top: 8,
                                 right: 8,
                                 child: GestureDetector(
-                                  onTap: () {
-                                    setState(() {
-                                      _coverImage = null;
-                                    });
-                                  },
+                                  onTap: () =>
+                                      setState(() => _coverImage = null),
                                   child: Container(
                                     padding: const EdgeInsets.all(8),
                                     decoration: const BoxDecoration(
@@ -376,7 +408,7 @@ class _PublishBookPageState extends State<PublishBookPage> {
                               Container(
                                 padding: const EdgeInsets.all(16),
                                 decoration: BoxDecoration(
-                                  color: darkBrown.withOpacity(0.1),
+                                  color: darkBrown.withValues(alpha: 0.1),
                                   shape: BoxShape.circle,
                                 ),
                                 child: const Icon(
@@ -396,7 +428,7 @@ class _PublishBookPageState extends State<PublishBookPage> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                'Recommended: 600x900 pixels',
+                                'Recommended: 600×900 pixels',
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: Colors.grey[500],
@@ -406,20 +438,54 @@ class _PublishBookPageState extends State<PublishBookPage> {
                           ),
                   ),
                 ),
-
                 const SizedBox(height: 24),
 
-                // Book Details Section
-                const Text(
-                  'Book Details',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: darkBrown,
-                  ),
+                // ── Category ──────────────────────────────────────────
+                _sectionTitle('Category *'),
+                const SizedBox(height: 4),
+                Text(
+                  'Select the genre — buyers filter by this',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _categories.map((cat) {
+                    final isSel = _selectedCategory == cat;
+                    return GestureDetector(
+                      onTap: () => setState(() => _selectedCategory = cat),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isSel ? mediumBrown : Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: isSel ? mediumBrown : Colors.grey.shade300,
+                          ),
+                        ),
+                        child: Text(
+                          cat,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: isSel
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                            color: isSel ? Colors.white : mediumBrown,
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 24),
 
+                // ── Book Details ──────────────────────────────────────
+                _sectionTitle('Book Details'),
+                const SizedBox(height: 16),
                 _buildTextField(
                   controller: _bookTitleController,
                   label: 'Book Title',
@@ -427,9 +493,7 @@ class _PublishBookPageState extends State<PublishBookPage> {
                   icon: Icons.book_rounded,
                   isRequired: true,
                 ),
-
                 const SizedBox(height: 16),
-
                 _buildTextField(
                   controller: _authorNameController,
                   label: 'Author Name',
@@ -437,9 +501,7 @@ class _PublishBookPageState extends State<PublishBookPage> {
                   icon: Icons.person_rounded,
                   isRequired: true,
                 ),
-
                 const SizedBox(height: 16),
-
                 _buildTextField(
                   controller: _synopsisController,
                   label: 'Synopsis / Description',
@@ -448,17 +510,37 @@ class _PublishBookPageState extends State<PublishBookPage> {
                   isRequired: true,
                   maxLines: 5,
                 ),
-
                 const SizedBox(height: 16),
 
-                _buildTextField(
-                  controller: _genreController,
-                  label: 'Genre / Category',
-                  hint: 'e.g., Fiction, Non-fiction, Self-help, Poetry',
-                  icon: Icons.category_rounded,
-                  isRequired: true,
+                // Language & Binding row
+                Row(
+                  children: [
+                    Expanded(
+                      child: _dropdownField(
+                        label: 'Language',
+                        value: _selectedLanguage,
+                        items: [
+                          'Bangla',
+                          'English',
+                          'Hindi',
+                          'Arabic',
+                          'Other',
+                        ],
+                        onChanged: (v) =>
+                            setState(() => _selectedLanguage = v!),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: _dropdownField(
+                        label: 'Binding',
+                        value: _selectedBinding,
+                        items: ['Paperback', 'Hardcover', 'Spiral Bound'],
+                        onChanged: (v) => setState(() => _selectedBinding = v!),
+                      ),
+                    ),
+                  ],
                 ),
-
                 const SizedBox(height: 16),
 
                 Row(
@@ -485,135 +567,11 @@ class _PublishBookPageState extends State<PublishBookPage> {
                     ),
                   ],
                 ),
-
-                const SizedBox(height: 16),
-
-                // Language Dropdown
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Row(
-                      children: [
-                        Text(
-                          'Language',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF333333),
-                          ),
-                        ),
-                        Text(
-                          ' *',
-                          style: TextStyle(
-                            color: Colors.red,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.shade200),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: _selectedLanguage,
-                          isExpanded: true,
-                          icon: const Icon(Icons.keyboard_arrow_down_rounded),
-                          items:
-                              ['Bangla', 'English', 'Hindi', 'Arabic', 'Other']
-                                  .map(
-                                    (lang) => DropdownMenuItem(
-                                      value: lang,
-                                      child: Text(lang),
-                                    ),
-                                  )
-                                  .toList(),
-                          onChanged: (value) {
-                            setState(() {
-                              _selectedLanguage = value!;
-                            });
-                          },
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 16),
-
-                // Binding Type Dropdown
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Row(
-                      children: [
-                        Text(
-                          'Binding Type',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF333333),
-                          ),
-                        ),
-                        Text(
-                          ' *',
-                          style: TextStyle(
-                            color: Colors.red,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.shade200),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: _selectedBinding,
-                          isExpanded: true,
-                          icon: const Icon(Icons.keyboard_arrow_down_rounded),
-                          items: ['Paperback', 'Hardcover', 'Spiral Bound']
-                              .map(
-                                (binding) => DropdownMenuItem(
-                                  value: binding,
-                                  child: Text(binding),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) {
-                            setState(() {
-                              _selectedBinding = value!;
-                            });
-                          },
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
                 const SizedBox(height: 24),
 
-                // Pricing & Inventory Section
-                const Text(
-                  'Pricing & Inventory',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: darkBrown,
-                  ),
-                ),
+                // ── Pricing & Inventory ───────────────────────────────
+                _sectionTitle('Pricing & Inventory'),
                 const SizedBox(height: 16),
-
                 Row(
                   children: [
                     Expanded(
@@ -636,10 +594,9 @@ class _PublishBookPageState extends State<PublishBookPage> {
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 24),
 
-                // How It Works Section
+                // ── How it works ──────────────────────────────────────
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -659,32 +616,31 @@ class _PublishBookPageState extends State<PublishBookPage> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      _buildStepItem('1', 'Submit your book details'),
-                      _buildStepItem(
-                        '2',
-                        'We review and approve within 48 hours',
+                      _stepItem('1', 'Submit your book details & cover'),
+                      _stepItem('2', 'Admin reviews and approves within 48h'),
+                      _stepItem(
+                        '3',
+                        'Your book appears in "Recently Published" section',
                       ),
-                      _buildStepItem('3', 'You print the books yourself'),
-                      _buildStepItem(
+                      _stepItem(
                         '4',
-                        'Our delivery team picks up from you',
+                        'Buyers can ask questions — answer to boost sales',
                       ),
-                      _buildStepItem(
-                        '5',
-                        'We deliver to readers, you get paid!',
+                      _stepItem('5', 'You print copies; we handle delivery'),
+                      _stepItem(
+                        '6',
+                        'Payment sent to your selected method after each sale',
                       ),
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 24),
 
-                // Payment Method Section
-                _buildPaymentMethodSection(),
-
+                // ── Payment ───────────────────────────────────────────
+                _buildPaymentSection(),
                 const SizedBox(height: 16),
 
-                // Commission Notice
+                // ── Commission notice ─────────────────────────────────
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -701,7 +657,7 @@ class _PublishBookPageState extends State<PublishBookPage> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'Boipara charges 15% commission per sale. You handle printing and quality control. No COD - payment via selected method only.',
+                          'Boipara charges 15% commission per sale. You handle printing and quality control. No COD — payment via selected method only.',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey[600],
@@ -711,10 +667,9 @@ class _PublishBookPageState extends State<PublishBookPage> {
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 24),
 
-                // Submit Button
+                // ── Submit ────────────────────────────────────────────
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
@@ -748,7 +703,6 @@ class _PublishBookPageState extends State<PublishBookPage> {
                           ),
                   ),
                 ),
-
                 const SizedBox(height: 32),
               ],
             ),
@@ -758,13 +712,14 @@ class _PublishBookPageState extends State<PublishBookPage> {
     );
   }
 
-  Widget _buildPaymentMethodSection() {
+  // ── Payment Section ──────────────────────────────────────────────────
+  Widget _buildPaymentSection() {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: darkBrown.withOpacity(0.2)),
+        border: Border.all(color: darkBrown.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -774,7 +729,7 @@ class _PublishBookPageState extends State<PublishBookPage> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: darkBrown.withOpacity(0.1),
+                  color: darkBrown.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(
@@ -805,540 +760,317 @@ class _PublishBookPageState extends State<PublishBookPage> {
               ),
             ],
           ),
-
           const SizedBox(height: 16),
-
-          // Terms Checkbox
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: _acceptedPaymentTerms
-                  ? darkBrown.withOpacity(0.05)
-                  : Colors.orange.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: _acceptedPaymentTerms
-                    ? darkBrown.withOpacity(0.2)
-                    : Colors.orange.withOpacity(0.3),
-              ),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          if (_loadingPayments)
+            const Center(child: CircularProgressIndicator(color: darkBrown))
+          else if (_paymentMethods.isEmpty)
+            Column(
               children: [
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.orange.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        color: Colors.orange.shade700,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          'No saved payment methods. Add one to receive payment after selling.',
+                          style: TextStyle(fontSize: 13, color: Colors.black87),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
                 SizedBox(
-                  height: 24,
-                  width: 24,
-                  child: Checkbox(
-                    value: _acceptedPaymentTerms,
-                    onChanged: (value) {
-                      setState(() {
-                        _acceptedPaymentTerms = value ?? false;
-                        if (!_acceptedPaymentTerms) {
-                          _selectedPaymentMethod = null;
-                        }
-                      });
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const PaymentMethodsScreen(),
+                        ),
+                      );
+                      _loadPaymentMethods();
                     },
-                    activeColor: darkBrown,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(4),
+                    icon: const Icon(Icons.add, color: darkBrown),
+                    label: const Text(
+                      'Add Payment Method',
+                      style: TextStyle(color: darkBrown),
                     ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Text(
-                    'I agree to receive payment through mobile banking, bank account, or debit/credit card. Cash on Delivery (COD) is not available.',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Color(0xFF333333),
-                      height: 1.4,
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: darkBrown),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                 ),
               ],
-            ),
-          ),
-
-          if (_acceptedPaymentTerms) ...[
-            const SizedBox(height: 16),
-
-            // Payment Method Options
-            _buildPaymentOption(
-              title: 'Mobile Banking',
-              subtitle: 'bKash, Nagad, Upay',
-              icon: Icons.phone_android_rounded,
-              value: 'mobile_banking',
-            ),
-            const SizedBox(height: 10),
-            _buildPaymentOption(
-              title: 'Bank Account',
-              subtitle: 'Transfer to your bank account',
-              icon: Icons.account_balance_rounded,
-              value: 'bank_account',
-            ),
-            const SizedBox(height: 10),
-            _buildPaymentOption(
-              title: 'Debit/Credit Card',
-              subtitle: 'Visa, Mastercard',
-              icon: Icons.credit_card_rounded,
-              value: 'card',
-            ),
-
-            // Show details based on selection
-            if (_selectedPaymentMethod == 'mobile_banking') ...[
-              const SizedBox(height: 16),
-              _buildMobileBankingDetails(),
-            ],
-
-            if (_selectedPaymentMethod == 'bank_account') ...[
-              const SizedBox(height: 16),
-              _buildBankAccountDetails(),
-            ],
-
-            if (_selectedPaymentMethod == 'card') ...[
-              const SizedBox(height: 16),
-              _buildCardDetails(),
-            ],
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPaymentOption({
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required String value,
-  }) {
-    final isSelected = _selectedPaymentMethod == value;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedPaymentMethod = value;
-        });
-      },
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: isSelected ? darkBrown.withOpacity(0.08) : Colors.grey.shade50,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isSelected ? darkBrown : Colors.grey.shade200,
-            width: isSelected ? 2 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: isSelected ? darkBrown : Colors.grey.shade200,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                icon,
-                color: isSelected ? Colors.white : Colors.grey[600],
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: isSelected ? darkBrown : const Color(0xFF333333),
-                    ),
-                  ),
-                  Text(
-                    subtitle,
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                  ),
-                ],
-              ),
-            ),
-            Radio<String>(
-              value: value,
-              groupValue: _selectedPaymentMethod,
-              onChanged: (val) {
-                setState(() {
-                  _selectedPaymentMethod = val;
-                });
-              },
-              activeColor: darkBrown,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMobileBankingDetails() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Select Mobile Banking Provider',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF333333),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: _mobileBankingOptions.map((option) {
-              final isSelected = _selectedMobileBanking == option;
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedMobileBanking = option;
-                    });
-                  },
-                  child: Container(
-                    margin: EdgeInsets.only(
-                      right: option != _mobileBankingOptions.last ? 8 : 0,
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    decoration: BoxDecoration(
-                      color: isSelected ? darkBrown : Colors.white,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: isSelected ? darkBrown : Colors.grey.shade300,
-                      ),
-                    ),
-                    child: Text(
-                      option,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: isSelected ? Colors.white : Colors.grey[700],
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _mobileNumberController,
-            keyboardType: TextInputType.phone,
-            decoration: InputDecoration(
-              labelText: 'Mobile Number',
-              hintText: '01XXXXXXXXX',
-              prefixIcon: const Icon(Icons.phone, color: darkBrown),
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: darkBrown, width: 2),
-              ),
-            ),
-            validator: (value) {
-              if (_selectedPaymentMethod == 'mobile_banking') {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Mobile number is required';
-                }
-                if (value.length < 11) {
-                  return 'Enter a valid mobile number';
-                }
-              }
-              return null;
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBankAccountDetails() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Bank Account Details',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF333333),
-            ),
-          ),
-          const SizedBox(height: 12),
-          // Bank Selection Dropdown
-          DropdownButtonFormField<String>(
-            value: _selectedBank,
-            decoration: InputDecoration(
-              labelText: 'Select Bank',
-              prefixIcon: const Icon(Icons.account_balance, color: darkBrown),
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: darkBrown, width: 2),
-              ),
-            ),
-            items: _bankOptions.map((bank) {
-              return DropdownMenuItem(
-                value: bank,
-                child: Text(
-                  bank,
-                  style: const TextStyle(fontSize: 14),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              );
-            }).toList(),
-            onChanged: (value) {
-              setState(() {
-                _selectedBank = value;
-              });
-            },
-            validator: (value) {
-              if (_selectedPaymentMethod == 'bank_account' && value == null) {
-                return 'Please select a bank';
-              }
-              return null;
-            },
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _accountHolderNameController,
-            decoration: InputDecoration(
-              labelText: 'Account Holder Name',
-              hintText: 'As per bank records',
-              prefixIcon: const Icon(Icons.person_outline, color: darkBrown),
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: darkBrown, width: 2),
-              ),
-            ),
-            validator: (value) {
-              if (_selectedPaymentMethod == 'bank_account') {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Account holder name is required';
-                }
-              }
-              return null;
-            },
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _accountNumberController,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              labelText: 'Account Number',
-              hintText: 'Enter your bank account number',
-              prefixIcon: const Icon(Icons.numbers, color: darkBrown),
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: darkBrown, width: 2),
-              ),
-            ),
-            validator: (value) {
-              if (_selectedPaymentMethod == 'bank_account') {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Account number is required';
-                }
-              }
-              return null;
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCardDetails() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Card Details',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF333333),
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _accountHolderNameController,
-            decoration: InputDecoration(
-              labelText: 'Cardholder Name',
-              hintText: 'Name on card',
-              prefixIcon: const Icon(Icons.person_outline, color: darkBrown),
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: darkBrown, width: 2),
-              ),
-            ),
-            validator: (value) {
-              if (_selectedPaymentMethod == 'card') {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Cardholder name is required';
-                }
-              }
-              return null;
-            },
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _cardNumberController,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              labelText: 'Card Number',
-              hintText: 'XXXX XXXX XXXX XXXX',
-              prefixIcon: const Icon(Icons.credit_card, color: darkBrown),
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: darkBrown, width: 2),
-              ),
-            ),
-            validator: (value) {
-              if (_selectedPaymentMethod == 'card') {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Card number is required';
-                }
-                if (value.replaceAll(' ', '').length < 16) {
-                  return 'Enter a valid card number';
-                }
-              }
-              return null;
-            },
-          ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.blue.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
+            )
+          else
+            Column(
               children: [
-                Icon(Icons.security, color: Colors.blue[700], size: 18),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Your card details are encrypted and secure',
-                    style: TextStyle(fontSize: 12, color: Colors.blue[700]),
+                ..._paymentMethods.map((method) {
+                  final isSelected = _selectedPaymentId == method['id'];
+                  final color = _typeColors[method['type']] ?? darkBrown;
+                  final logo = method['type'] == 'Bank Account'
+                      ? 'BA'
+                      : (method['type'] as String)[0];
+                  final isBank = method['type'] == 'Bank Account';
+                  return GestureDetector(
+                    onTap: () =>
+                        setState(() => _selectedPaymentId = method['id']),
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? darkBrown.withValues(alpha: 0.06)
+                            : Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isSelected ? darkBrown : Colors.grey.shade200,
+                          width: isSelected ? 2 : 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: color,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Center(
+                              child: Text(
+                                logo,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(
+                                      method['type'],
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                    if (isBank &&
+                                        (method['bankName'] ?? '')
+                                            .toString()
+                                            .isNotEmpty) ...[
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        '· ${method['bankName']}',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey.shade500,
+                                        ),
+                                      ),
+                                    ],
+                                    if (method['isDefault'] == true) ...[
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: const Color(
+                                            0xFF059669,
+                                          ).withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                        ),
+                                        child: const Text(
+                                          'Default',
+                                          style: TextStyle(
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFF059669),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  method['number'] ?? '',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                                Text(
+                                  method['name'] ?? '',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey.shade400,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Radio<String>(
+                            value: method['id'],
+                            groupValue: _selectedPaymentId,
+                            onChanged: (val) =>
+                                setState(() => _selectedPaymentId = val),
+                            activeColor: darkBrown,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+                const SizedBox(height: 4),
+                GestureDetector(
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const PaymentMethodsScreen(),
+                      ),
+                    );
+                    _loadPaymentMethods();
+                  },
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.add_circle_outline,
+                        size: 16,
+                        color: darkBrown.withValues(alpha: 0.7),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Add another payment method',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: darkBrown.withValues(alpha: 0.7),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-          ),
         ],
       ),
     );
   }
 
-  Widget _buildStepItem(String number, String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        children: [
-          Container(
-            width: 24,
-            height: 24,
-            decoration: BoxDecoration(
-              color: darkBrown.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: Text(
-                number,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: darkBrown,
-                ),
+  // ── Helpers ──────────────────────────────────────────────────────────
+  Widget _sectionTitle(String t) => Text(
+    t,
+    style: const TextStyle(
+      fontSize: 16,
+      fontWeight: FontWeight.bold,
+      color: darkBrown,
+    ),
+  );
+
+  Widget _stepItem(String number, String text) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Row(
+      children: [
+        Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            color: mediumBrown.withValues(alpha: 0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: Text(
+              number,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: mediumBrown,
               ),
             ),
           ),
-          const SizedBox(width: 12),
-          Text(text, style: TextStyle(fontSize: 13, color: Colors.grey[700])),
-        ],
-      ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _dropdownField({
+    required String label,
+    required String value,
+    required List<String> items,
+    required void Function(String?) onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF333333),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: value,
+              isExpanded: true,
+              icon: const Icon(Icons.keyboard_arrow_down_rounded),
+              items: items
+                  .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                  .toList(),
+              onChanged: onChanged,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1485,12 +1217,8 @@ class _PublishBookPageState extends State<PublishBookPage> {
             ),
           ),
           validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return 'Required';
-            }
-            if (double.tryParse(value) == null) {
-              return 'Enter valid price';
-            }
+            if (value == null || value.trim().isEmpty) return 'Required';
+            if (double.tryParse(value) == null) return 'Enter valid price';
             return null;
           },
         ),

@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'signup_screen.dart';
 import 'google_phone_verify_screen.dart';
+import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -19,6 +20,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
   bool _isLoading = false;
   bool _isGoogleLoading = false;
+  bool _isGuestLoading = false;
 
   static const darkBrown = Color(0xFF613613);
   static const mediumBrown = Color(0xFF7C4700);
@@ -31,6 +33,7 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  // ── Login ─────────────────────────────────────────────────────────────
   Future<void> _login() async {
     final mobile = _mobileController.text.trim();
     final password = _passwordController.text.trim();
@@ -56,7 +59,6 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       final email = query.docs.first['email'] as String;
-
       await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: email,
         password: password,
@@ -82,100 +84,78 @@ class _LoginScreenState extends State<LoginScreen> {
           message = 'Login failed. Please try again';
       }
       _showError(message);
-    } catch (e) {
+    } catch (_) {
       _showError('Something went wrong. Please try again');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
+  // ── Google Sign-In ────────────────────────────────────────────────────
   Future<void> _googleSignIn() async {
     setState(() => _isGoogleLoading = true);
-
     try {
       UserCredential userCredential;
 
       if (kIsWeb) {
-        // Web: use Firebase popup directly
         final googleProvider = GoogleAuthProvider();
         userCredential = await FirebaseAuth.instance.signInWithPopup(
           googleProvider,
         );
       } else {
-        // Android: use google_sign_in package
         final GoogleSignIn googleSignIn = GoogleSignIn();
         final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
-
         if (googleUser == null) {
           setState(() => _isGoogleLoading = false);
           return;
         }
-
-        final GoogleSignInAuthentication googleAuth =
-            await googleUser.authentication;
-
+        final googleAuth = await googleUser.authentication;
         final credential = GoogleAuthProvider.credential(
           accessToken: googleAuth.accessToken,
           idToken: googleAuth.idToken,
         );
-
         userCredential = await FirebaseAuth.instance.signInWithCredential(
           credential,
         );
       }
 
       final user = userCredential.user!;
-
       final doc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .get();
 
       if (doc.exists) {
-        if (mounted) {
+        if (mounted)
           Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
-        }
       } else {
-        if (mounted) {
+        if (mounted)
           Navigator.push(
             context,
             MaterialPageRoute(
               builder: (_) => GooglePhoneVerifyScreen(googleUser: user),
             ),
           );
-        }
       }
-    } catch (e) {
+    } catch (_) {
       _showError('Google sign-in failed. Please try again');
     } finally {
       if (mounted) setState(() => _isGoogleLoading = false);
     }
   }
 
-  Future<void> _forgotPassword() async {
-    final mobile = _mobileController.text.trim();
-    if (mobile.isEmpty) {
-      _showError('Enter your mobile number above first');
-      return;
-    }
-
+  // ── Guest Login ───────────────────────────────────────────────────────
+  Future<void> _guestLogin() async {
+    setState(() => _isGuestLoading = true);
     try {
-      final query = await FirebaseFirestore.instance
-          .collection('users')
-          .where('mobile', isEqualTo: mobile)
-          .limit(1)
-          .get();
-
-      if (query.docs.isEmpty) {
-        _showError('No account found with this mobile number');
-        return;
-      }
-
-      final email = query.docs.first['email'] as String;
-      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
-      _showSuccess('Password reset email sent!');
-    } catch (e) {
-      _showError('Failed to send reset email');
+      // Firebase anonymous sign-in — free, no OTP, no email
+      await FirebaseAuth.instance.signInAnonymously();
+      if (mounted)
+        Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+    } catch (_) {
+      _showError('Could not continue as guest. Try again.');
+    } finally {
+      if (mounted) setState(() => _isGuestLoading = false);
     }
   }
 
@@ -184,17 +164,6 @@ class _LoginScreenState extends State<LoginScreen> {
       SnackBar(
         content: Text(message),
         backgroundColor: Colors.redAccent,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    );
-  }
-
-  void _showSuccess(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: const Color(0xFF059669),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
@@ -224,9 +193,60 @@ class _LoginScreenState extends State<LoginScreen> {
                     _buildForgotPassword(),
                     const SizedBox(height: 20),
                     _buildLoginButton(),
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 16),
+
+                    // ── Guest button ───────────────────────────────────
+                    SizedBox(
+                      width: double.infinity,
+                      height: 54,
+                      child: OutlinedButton.icon(
+                        onPressed: _isGuestLoading ? null : _guestLogin,
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(
+                            color: darkBrown.withValues(alpha: 0.4),
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          backgroundColor: Colors.white,
+                        ),
+                        icon: _isGuestLoading
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.person_outline_rounded,
+                                color: darkBrown,
+                              ),
+                        label: const Text(
+                          'Browse as Guest',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: darkBrown,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        'Guests can browse but cannot buy, sell or publish',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade500,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
                     _buildDivider(),
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 24),
                     _buildGoogleButton(),
                     const SizedBox(height: 32),
                     _buildSignUpLink(),
@@ -325,203 +345,183 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildMobileField() {
-    return TextField(
-      controller: _mobileController,
-      keyboardType: TextInputType.phone,
-      decoration: InputDecoration(
-        labelText: 'Mobile Number (e.g. +8801XXXXXXXXX)',
-        prefixIcon: const Icon(Icons.phone_android_outlined, color: darkBrown),
-        filled: true,
-        fillColor: Colors.white,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: darkBrown, width: 2),
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 20,
-          vertical: 18,
-        ),
+  Widget _buildMobileField() => TextField(
+    controller: _mobileController,
+    keyboardType: TextInputType.phone,
+    decoration: InputDecoration(
+      labelText: 'Mobile Number (e.g. +8801XXXXXXXXX)',
+      prefixIcon: const Icon(Icons.phone_android_outlined, color: darkBrown),
+      filled: true,
+      fillColor: Colors.white,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide.none,
       ),
-    );
-  }
-
-  Widget _buildPasswordField() {
-    return TextField(
-      controller: _passwordController,
-      obscureText: _obscurePassword,
-      decoration: InputDecoration(
-        labelText: 'Password',
-        prefixIcon: const Icon(Icons.lock_outline, color: darkBrown),
-        suffixIcon: IconButton(
-          icon: Icon(
-            _obscurePassword
-                ? Icons.visibility_outlined
-                : Icons.visibility_off_outlined,
-            color: Colors.grey,
-          ),
-          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-        ),
-        filled: true,
-        fillColor: Colors.white,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: darkBrown, width: 2),
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 20,
-          vertical: 18,
-        ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide.none,
       ),
-    );
-  }
-
-  Widget _buildForgotPassword() {
-    return Align(
-      alignment: Alignment.centerRight,
-      child: TextButton(
-        onPressed: _forgotPassword,
-        style: TextButton.styleFrom(foregroundColor: darkBrown),
-        child: const Text(
-          'Forgot Password?',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: darkBrown, width: 2),
       ),
-    );
-  }
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+    ),
+  );
 
-  Widget _buildLoginButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 56,
-      child: ElevatedButton(
-        onPressed: _isLoading ? null : _login,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: darkBrown,
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-          elevation: 3,
+  Widget _buildPasswordField() => TextField(
+    controller: _passwordController,
+    obscureText: _obscurePassword,
+    decoration: InputDecoration(
+      labelText: 'Password',
+      prefixIcon: const Icon(Icons.lock_outline, color: darkBrown),
+      suffixIcon: IconButton(
+        icon: Icon(
+          _obscurePassword
+              ? Icons.visibility_outlined
+              : Icons.visibility_off_outlined,
+          color: Colors.grey,
         ),
-        child: _isLoading
-            ? const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
-                  color: Colors.white,
-                  strokeWidth: 2.5,
-                ),
-              )
-            : const Text(
-                'LOG IN',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1,
-                ),
-              ),
+        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
       ),
-    );
-  }
-
-  Widget _buildDivider() {
-    return Row(
-      children: [
-        Expanded(child: Divider(color: Colors.grey.shade400)),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text(
-            'or login with',
-            style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-          ),
-        ),
-        Expanded(child: Divider(color: Colors.grey.shade400)),
-      ],
-    );
-  }
-
-  Widget _buildGoogleButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 54,
-      child: OutlinedButton(
-        onPressed: _isGoogleLoading ? null : _googleSignIn,
-        style: OutlinedButton.styleFrom(
-          side: BorderSide(color: Colors.grey.shade300),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-          backgroundColor: Colors.white,
-        ),
-        child: _isGoogleLoading
-            ? const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2.5),
-              )
-            : Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Image.network(
-                    'https://cdn-icons-png.flaticon.com/512/2991/2991148.png',
-                    height: 24,
-                  ),
-                  const SizedBox(width: 12),
-                  const Text(
-                    'Continue with Google',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
-                  ),
-                ],
-              ),
+      filled: true,
+      fillColor: Colors.white,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide.none,
       ),
-    );
-  }
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: darkBrown, width: 2),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+    ),
+  );
 
-  Widget _buildSignUpLink() {
-    return GestureDetector(
-      onTap: () => Navigator.push(
+  // ── Forgot Password — navigates to new OTP-based screen ───────────────
+  Widget _buildForgotPassword() => Align(
+    alignment: Alignment.centerRight,
+    child: TextButton(
+      onPressed: () => Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => const SignUpScreen()),
+        MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
       ),
-      child: RichText(
-        text: const TextSpan(
-          style: TextStyle(color: Colors.black87, fontSize: 15),
-          children: [
-            TextSpan(text: "Don't have an account? "),
-            TextSpan(
-              text: 'SIGN UP',
+      style: TextButton.styleFrom(foregroundColor: darkBrown),
+      child: const Text(
+        'Forgot Password?',
+        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+      ),
+    ),
+  );
+
+  Widget _buildLoginButton() => SizedBox(
+    width: double.infinity,
+    height: 56,
+    child: ElevatedButton(
+      onPressed: _isLoading ? null : _login,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: darkBrown,
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        elevation: 3,
+      ),
+      child: _isLoading
+          ? const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                color: Colors.white,
+                strokeWidth: 2.5,
+              ),
+            )
+          : const Text(
+              'LOG IN',
               style: TextStyle(
-                color: darkBrown,
+                fontSize: 18,
                 fontWeight: FontWeight.bold,
-                fontSize: 16,
+                letterSpacing: 1,
               ),
             ),
-          ],
+    ),
+  );
+
+  Widget _buildDivider() => Row(
+    children: [
+      Expanded(child: Divider(color: Colors.grey.shade400)),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Text(
+          'or login with',
+          style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
         ),
       ),
-    );
-  }
+      Expanded(child: Divider(color: Colors.grey.shade400)),
+    ],
+  );
+
+  Widget _buildGoogleButton() => SizedBox(
+    width: double.infinity,
+    height: 54,
+    child: OutlinedButton(
+      onPressed: _isGoogleLoading ? null : _googleSignIn,
+      style: OutlinedButton.styleFrom(
+        side: BorderSide(color: Colors.grey.shade300),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        backgroundColor: Colors.white,
+      ),
+      child: _isGoogleLoading
+          ? const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2.5),
+            )
+          : Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Image.network(
+                  'https://cdn-icons-png.flaticon.com/512/2991/2991148.png',
+                  height: 24,
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Continue with Google',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+              ],
+            ),
+    ),
+  );
+
+  Widget _buildSignUpLink() => GestureDetector(
+    onTap: () => Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const SignUpScreen()),
+    ),
+    child: RichText(
+      text: TextSpan(
+        style: TextStyle(color: Colors.black87, fontSize: 15),
+        children: [
+          TextSpan(text: "Don't have an account? "),
+          TextSpan(
+            text: 'SIGN UP',
+            style: TextStyle(
+              color: darkBrown,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 class LayeredWaveClipper extends CustomClipper<Path> {
@@ -551,22 +551,4 @@ class LayeredWaveClipper extends CustomClipper<Path> {
 
   @override
   bool shouldReclip(covariant CustomClipper<Path> oldClipper) => true;
-}
-
-class _EdgeStripClipper extends CustomClipper<Path> {
-  final LayeredWaveClipper base;
-  final double thickness;
-  _EdgeStripClipper(this.base, {required this.thickness});
-
-  @override
-  Path getClip(Size size) {
-    final outer = base.getClip(size);
-    final inner = LayeredWaveClipper(
-      offset: base.offset + thickness,
-    ).getClip(size);
-    return Path.combine(PathOperation.difference, outer, inner);
-  }
-
-  @override
-  bool shouldReclip(_EdgeStripClipper old) => old.thickness != thickness;
 }

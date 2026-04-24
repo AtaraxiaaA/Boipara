@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'payment_methods_screen.dart';
+import 'guest_guard.dart';
 
 class SellBookPage extends StatefulWidget {
   const SellBookPage({super.key});
@@ -26,12 +27,25 @@ class _SellBookPageState extends State<SellBookPage> {
   final ImagePicker _picker = ImagePicker();
   bool _isSubmitting = false;
 
+  // Category & listing type — must match buy_books_screen filters
+  String _selectedCategory = 'Fiction';
+  final _categories = [
+    'Fiction',
+    'Non-Fiction',
+    'Textbook',
+    'Poetry',
+    'Self-Help',
+    'Horror',
+    'History',
+  ];
+
   // Payment
   List<Map<String, dynamic>> _paymentMethods = [];
   bool _loadingPayments = true;
   String? _selectedPaymentId;
 
   static const Color darkBrown = Color(0xFF613613);
+  static const Color mediumBrown = Color(0xFF7C4700);
   static const Color accentOrange = Color(0xFFE07B39);
   static const Color backgroundColor = Color(0xFFF5F0E9);
 
@@ -75,8 +89,6 @@ class _SellBookPageState extends State<SellBookPage> {
           data['id'] = doc.id;
           return data;
         }).toList();
-
-        // Auto-select default
         final defaultMethod = _paymentMethods.firstWhere(
           (m) => m['isDefault'] == true,
           orElse: () => {},
@@ -85,8 +97,7 @@ class _SellBookPageState extends State<SellBookPage> {
           _selectedPaymentId = defaultMethod['id'];
         }
       });
-    } catch (e) {
-      // ignore
+    } catch (_) {
     } finally {
       if (mounted) setState(() => _loadingPayments = false);
     }
@@ -98,9 +109,7 @@ class _SellBookPageState extends State<SellBookPage> {
         imageQuality: 80,
         maxWidth: 1200,
       );
-      if (images.isNotEmpty) {
-        setState(() => _selectedImages.addAll(images));
-      }
+      if (images.isNotEmpty) setState(() => _selectedImages.addAll(images));
     } catch (e) {
       _showSnack('Error picking images: $e', Colors.red);
     }
@@ -134,13 +143,12 @@ class _SellBookPageState extends State<SellBookPage> {
   }
 
   Future<void> _submitBook() async {
+    if (showGuestDialog(context)) return;
     if (!_formKey.currentState!.validate()) return;
-
     if (_selectedImages.isEmpty) {
       _showSnack('Please add at least one photo of your book', Colors.orange);
       return;
     }
-
     if (_selectedPaymentId == null) {
       _showSnack('Please select a payment method', Colors.orange);
       return;
@@ -151,104 +159,131 @@ class _SellBookPageState extends State<SellBookPage> {
     try {
       final uid = FirebaseAuth.instance.currentUser!.uid;
 
-      // Get selected payment method details
+      // Fetch seller profile so buy screen can show name/photo immediately
+      String sellerName = 'Unknown';
+      String sellerPhoto = '';
+      try {
+        final ud = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .get();
+        sellerName = ud.data()?['username'] ?? 'Unknown';
+        sellerPhoto = ud.data()?['profilePhoto'] ?? '';
+      } catch (_) {}
+
       final selectedMethod = _paymentMethods.firstWhere(
         (m) => m['id'] == _selectedPaymentId,
       );
 
-      // Save book to Firestore
       await FirebaseFirestore.instance.collection('books').add({
+        // ── Identity ──────────────────────────────────────────────
         'sellerId': uid,
+        'sellerName': sellerName,
+        'sellerPhoto': sellerPhoto,
+
+        // ── Book info ─────────────────────────────────────────────
         'bookName': _bookNameController.text.trim(),
         'authorName': _authorNameController.text.trim(),
         'edition': _editionController.text.trim(),
         'condition': _conditionController.text.trim(),
+
+        // ── Category — used by buy screen filter chips ────────────
+        'category': _selectedCategory,
+
+        // ── Listing type — 'thrift' shows in Thrift/Preloved grid ─
+        'listingType': 'thrift',
+
+        // ── Pricing ───────────────────────────────────────────────
         'buyingPrice': double.tryParse(_buyingPriceController.text.trim()) ?? 0,
         'askingPrice': double.tryParse(_askingPriceController.text.trim()) ?? 0,
+
+        // ── Extra ─────────────────────────────────────────────────
         'additionalNotes': _additionalNotesController.text.trim(),
         'paymentMethod': selectedMethod['type'],
         'paymentNumber': selectedMethod['number'] ?? '',
         'paymentName': selectedMethod['name'] ?? '',
+
+        // ── Status — admin approves → 'approved' ──────────────────
         'status': 'pending_review',
-        'images':
-            [], // TODO: Upload to Firebase Storage when Blaze plan enabled
+
+        // ── Images placeholder (upload when Blaze enabled) ────────
+        'images': [],
+
         'createdAt': FieldValue.serverTimestamp(),
       });
 
       setState(() => _isSubmitting = false);
-
-      // Show success dialog
-      if (mounted) {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: darkBrown.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.check_circle_rounded,
-                    color: darkBrown,
-                    size: 48,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Book Listed!',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: darkBrown,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Your book has been submitted for review. We\'ll contact you within 24 hours. Payment will be sent to your selected method after the book is sold.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 14, color: Colors.grey),
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(context); // close dialog
-                      Navigator.pop(context); // go back
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: darkBrown,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Text(
-                      'Done',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }
+      if (mounted) _showSuccessDialog();
     } catch (e) {
       setState(() => _isSubmitting = false);
       _showSnack('Failed to submit. Please try again', Colors.red);
     }
+  }
+
+  void _showSuccessDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: darkBrown.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.check_circle_rounded,
+                color: darkBrown,
+                size: 48,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Book Listed!',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: darkBrown,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Your book has been submitted for review. We\'ll contact you within 24 hours. Payment will be sent to your selected method after the book is sold.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: Colors.grey, height: 1.5),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.pop(context);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: darkBrown,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'Done',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -276,7 +311,7 @@ class _SellBookPageState extends State<SellBookPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header Info
+                // ── Info banner ───────────────────────────────────────
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -304,15 +339,8 @@ class _SellBookPageState extends State<SellBookPage> {
                 ),
                 const SizedBox(height: 24),
 
-                // ── Photo Upload ──────────────────────────────────────
-                const Text(
-                  'Book Photos *',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: darkBrown,
-                  ),
-                ),
+                // ── Photos ────────────────────────────────────────────
+                _sectionTitle('Book Photos *'),
                 const SizedBox(height: 4),
                 Text(
                   'Add multiple photos showing front cover, back cover, and any damages',
@@ -377,7 +405,7 @@ class _SellBookPageState extends State<SellBookPage> {
                       Row(
                         children: [
                           Expanded(
-                            child: _buildImagePickerButton(
+                            child: _imagePickerButton(
                               icon: Icons.photo_library_rounded,
                               label: 'Gallery',
                               onTap: _pickImages,
@@ -385,7 +413,7 @@ class _SellBookPageState extends State<SellBookPage> {
                           ),
                           const SizedBox(width: 12),
                           Expanded(
-                            child: _buildImagePickerButton(
+                            child: _imagePickerButton(
                               icon: Icons.camera_alt_rounded,
                               label: 'Camera',
                               onTap: _takePicture,
@@ -398,15 +426,51 @@ class _SellBookPageState extends State<SellBookPage> {
                 ),
                 const SizedBox(height: 24),
 
-                // ── Book Details ──────────────────────────────────────
-                const Text(
-                  'Book Details',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: darkBrown,
-                  ),
+                // ── Category ──────────────────────────────────────────
+                _sectionTitle('Category *'),
+                const SizedBox(height: 4),
+                Text(
+                  'Select the genre — buyers filter by this',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                 ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _categories.map((cat) {
+                    final isSel = _selectedCategory == cat;
+                    return GestureDetector(
+                      onTap: () => setState(() => _selectedCategory = cat),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isSel ? darkBrown : Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: isSel ? darkBrown : Colors.grey.shade300,
+                          ),
+                        ),
+                        child: Text(
+                          cat,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: isSel
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                            color: isSel ? Colors.white : darkBrown,
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 24),
+
+                // ── Book Details ──────────────────────────────────────
+                _sectionTitle('Book Details'),
                 const SizedBox(height: 16),
                 _buildTextField(
                   controller: _bookNameController,
@@ -435,7 +499,7 @@ class _SellBookPageState extends State<SellBookPage> {
                 _buildTextField(
                   controller: _conditionController,
                   label: 'Condition',
-                  hint: 'e.g., Used - Good, Unused but old, Like new',
+                  hint: 'e.g., Brand New, Like New, Very Good, Good',
                   icon: Icons.star_rounded,
                   isRequired: true,
                   maxLines: 2,
@@ -443,14 +507,7 @@ class _SellBookPageState extends State<SellBookPage> {
                 const SizedBox(height: 24),
 
                 // ── Pricing ───────────────────────────────────────────
-                const Text(
-                  'Pricing',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: darkBrown,
-                  ),
-                ),
+                _sectionTitle('Pricing'),
                 const SizedBox(height: 16),
                 Row(
                   children: [
@@ -482,11 +539,56 @@ class _SellBookPageState extends State<SellBookPage> {
                 ),
                 const SizedBox(height: 24),
 
-                // ── Payment Method ─────────────────────────────────────
+                // ── Payment ───────────────────────────────────────────
                 _buildPaymentSection(),
                 const SizedBox(height: 24),
 
-                // Commission Notice
+                // ── What happens next ─────────────────────────────────
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'What happens next?',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF333333),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _stepItem(
+                        '1',
+                        'Admin reviews your submission (within 24h)',
+                      ),
+                      _stepItem(
+                        '2',
+                        'Your book goes live in the Thrift/Preloved section',
+                      ),
+                      _stepItem(
+                        '3',
+                        'Buyers can ask questions — answer them to boost sales',
+                      ),
+                      _stepItem(
+                        '4',
+                        'A buyer places an order and you get notified instantly',
+                      ),
+                      _stepItem(
+                        '5',
+                        'Payment is sent to your selected method after delivery',
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // ── Commission notice ─────────────────────────────────
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -503,7 +605,7 @@ class _SellBookPageState extends State<SellBookPage> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'Boipara charges 10-15% commission after successful sale. Payment will be sent via your selected method.',
+                          'Boipara charges 10–15% commission after successful sale. Payment will be sent via your selected method.',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey[600],
@@ -515,7 +617,7 @@ class _SellBookPageState extends State<SellBookPage> {
                 ),
                 const SizedBox(height: 24),
 
-                // Submit Button
+                // ── Submit ────────────────────────────────────────────
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
@@ -558,7 +660,7 @@ class _SellBookPageState extends State<SellBookPage> {
     );
   }
 
-  // ── Payment Section Widget ───────────────────────────────────────────
+  // ── Payment Section ──────────────────────────────────────────────────
   Widget _buildPaymentSection() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -607,7 +709,6 @@ class _SellBookPageState extends State<SellBookPage> {
             ],
           ),
           const SizedBox(height: 16),
-
           if (_loadingPayments)
             const Center(child: CircularProgressIndicator(color: darkBrown))
           else if (_paymentMethods.isEmpty)
@@ -632,7 +733,7 @@ class _SellBookPageState extends State<SellBookPage> {
                       const SizedBox(width: 10),
                       const Expanded(
                         child: Text(
-                          'You have no saved payment methods. Add one to receive payment after selling.',
+                          'No saved payment methods. Add one to receive payment after selling.',
                           style: TextStyle(fontSize: 13, color: Colors.black87),
                         ),
                       ),
@@ -678,7 +779,6 @@ class _SellBookPageState extends State<SellBookPage> {
                       ? 'BA'
                       : (method['type'] as String)[0];
                   final isBank = method['type'] == 'Bank Account';
-
                   return GestureDetector(
                     onTap: () =>
                         setState(() => _selectedPaymentId = method['id']),
@@ -838,7 +938,50 @@ class _SellBookPageState extends State<SellBookPage> {
     );
   }
 
-  Widget _buildImagePickerButton({
+  // ── Helpers ──────────────────────────────────────────────────────────
+  Widget _sectionTitle(String t) => Text(
+    t,
+    style: const TextStyle(
+      fontSize: 16,
+      fontWeight: FontWeight.bold,
+      color: darkBrown,
+    ),
+  );
+
+  Widget _stepItem(String number, String text) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Row(
+      children: [
+        Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            color: darkBrown.withValues(alpha: 0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: Text(
+              number,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: darkBrown,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _imagePickerButton({
     required IconData icon,
     required String label,
     required VoidCallback onTap,
