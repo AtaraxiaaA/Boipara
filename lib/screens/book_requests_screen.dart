@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class BookRequestsScreen extends StatefulWidget {
   const BookRequestsScreen({super.key});
@@ -12,167 +14,16 @@ class _BookRequestsScreenState extends State<BookRequestsScreen> {
   static const accentOrange = Color(0xFFE07B39);
   static const backgroundColor = Color(0xFFF5F0E9);
 
-  // TODO: Replace with Firebase stream later
-  final List<Map<String, dynamic>> _posts = [
-    {
-      'id': '1',
-      'userName': 'Rakib Hassan',
-      'userInitial': 'R',
-      'userColor': Color(0xFF1E3A8A),
-      'timeAgo': '2h ago',
-      'title': 'Looking for: Atomic Habits',
-      'body':
-          'Need a copy of Atomic Habits by James Clear. Any edition is fine. Budget: 300-400 taka. DM me if you have one!',
-      'tag': 'Wanted',
-      'tagColor': Color(0xFFDC2626),
-      'likes': 12,
-      'commentCount': 4,
-      'isLiked': false,
-      'comments': [
-        {
-          'user': 'Sadia',
-          'initial': 'S',
-          'text': 'I have one! Will message you.',
-          'time': '1h ago',
-        },
-        {
-          'user': 'Tanim',
-          'initial': 'T',
-          'text': 'Check NSU book club, someone posted it.',
-          'time': '45m ago',
-        },
-        {
-          'user': 'Mim',
-          'initial': 'M',
-          'text': 'I saw it at a second hand store in Nilkhet!',
-          'time': '30m ago',
-        },
-        {
-          'user': 'Arif',
-          'initial': 'A',
-          'text': 'Budget seems a bit low. Usually goes for 500+',
-          'time': '20m ago',
-        },
-      ],
-    },
-    {
-      'id': '2',
-      'userName': 'Farhan Alam',
-      'userInitial': 'F',
-      'userColor': Color(0xFF059669),
-      'timeAgo': '5h ago',
-      'title': 'Anyone has Sapiens?',
-      'body':
-          'Looking for Sapiens by Yuval Noah Harari. Budget: 300-400 taka. Condition: Good or better. Located in Dhanmondi.',
-      'tag': 'Wanted',
-      'tagColor': Color(0xFFDC2626),
-      'likes': 8,
-      'commentCount': 2,
-      'isLiked': true,
-      'comments': [
-        {
-          'user': 'Mitu',
-          'initial': 'M',
-          'text': 'I just listed it on Boipara! Check buy books.',
-          'time': '4h ago',
-        },
-        {
-          'user': 'Raju',
-          'initial': 'R',
-          'text': 'Also looking for the same!',
-          'time': '3h ago',
-        },
-      ],
-    },
-    {
-      'id': '3',
-      'userName': 'Nusrat Jahan',
-      'userInitial': 'N',
-      'userColor': Color(0xFF7C3AED),
-      'timeAgo': '1d ago',
-      'title': 'Rare find: 1984 First Bangladeshi Edition',
-      'body':
-          'Found a 1984 first Bangladeshi print at an old book store in Nilkhet. Only one copy available. Anyone interested?',
-      'tag': 'Rare Find',
-      'tagColor': Color(0xFFB45309),
-      'likes': 34,
-      'commentCount': 3,
-      'isLiked': false,
-      'comments': [
-        {
-          'user': 'Arif',
-          'initial': 'A',
-          'text': 'Yes please! How much are you asking?',
-          'time': '23h ago',
-        },
-        {
-          'user': 'Rafa',
-          'initial': 'R',
-          'text': 'I am also very interested!',
-          'time': '20h ago',
-        },
-        {
-          'user': 'Sumaiya',
-          'initial': 'S',
-          'text': 'Please list it on Boipara 🙏',
-          'time': '18h ago',
-        },
-      ],
-    },
-    {
-      'id': '4',
-      'userName': 'Mehedi Islam',
-      'userInitial': 'M',
-      'userColor': Color(0xFFB45309),
-      'timeAgo': '2d ago',
-      'title': 'ISO: Any Harry Potter book',
-      'body':
-          'In search of any Harry Potter series book. Bangla or English both okay. Located in Mirpur. Can meet up or arrange delivery.',
-      'tag': 'ISO',
-      'tagColor': Color(0xFF0E7490),
-      'likes': 19,
-      'commentCount': 1,
-      'isLiked': false,
-      'comments': [
-        {
-          'user': 'Priya',
-          'initial': 'P',
-          'text': 'I have Philosopher\'s Stone in Bangla!',
-          'time': '1d ago',
-        },
-      ],
-    },
-    {
-      'id': '5',
-      'userName': 'Tanjila Ahmed',
-      'userInitial': 'T',
-      'userColor': Color(0xFFDC2626),
-      'timeAgo': '3d ago',
-      'title': 'Giving away: Old BUET textbooks',
-      'body':
-          'Have a bunch of old BUET engineering textbooks. Math, Physics, Chemistry. Free to a good home or cheap price. Pick up only — Uttara.',
-      'tag': 'Offering',
-      'tagColor': Color(0xFF059669),
-      'likes': 56,
-      'commentCount': 12,
-      'isLiked': true,
-      'comments': [
-        {
-          'user': 'Imran',
-          'initial': 'I',
-          'text': 'I need the Math ones! DM please!',
-          'time': '2d ago',
-        },
-        {
-          'user': 'Faria',
-          'initial': 'F',
-          'text': 'Which editions?',
-          'time': '2d ago',
-        },
-      ],
-    },
-  ];
+  // ── Auth ──────────────────────────────────────────────────────────────
+  String get _uid => FirebaseAuth.instance.currentUser?.uid ?? '';
+  bool get _isAnon => FirebaseAuth.instance.currentUser?.isAnonymous ?? true;
+  bool get _isLoggedIn => _uid.isNotEmpty && !_isAnon;
 
+  // ── Firestore ─────────────────────────────────────────────────────────
+  CollectionReference get _postsRef =>
+      FirebaseFirestore.instance.collection('book_requests');
+
+  // ── State ─────────────────────────────────────────────────────────────
   String _selectedFilter = 'All';
   final List<String> _filters = [
     'All',
@@ -183,30 +34,109 @@ class _BookRequestsScreenState extends State<BookRequestsScreen> {
     'Discussion',
   ];
 
-  final Map<String, Color> _tagColors = {
-    'Wanted': const Color(0xFFDC2626),
-    'ISO': const Color(0xFF0E7490),
-    'Rare Find': const Color(0xFFB45309),
-    'Offering': const Color(0xFF059669),
-    'Discussion': const Color(0xFF7C3AED),
+  static const Map<String, Color> _tagColors = {
+    'Wanted': Color(0xFFDC2626),
+    'ISO': Color(0xFF0E7490),
+    'Rare Find': Color(0xFFB45309),
+    'Offering': Color(0xFF059669),
+    'Discussion': Color(0xFF7C3AED),
   };
 
-  List<Map<String, dynamic>> get _filteredPosts {
-    if (_selectedFilter == 'All') return _posts;
-    return _posts.where((p) => p['tag'] == _selectedFilter).toList();
+  // Avatar colors for users who haven't set profile photo
+  static const List<Color> _avatarPalette = [
+    Color(0xFF1E3A8A),
+    Color(0xFF059669),
+    Color(0xFF7C3AED),
+    Color(0xFFB45309),
+    Color(0xFFDC2626),
+    Color(0xFF0E7490),
+  ];
+
+  // ── Helpers ───────────────────────────────────────────────────────────
+  String _timeAgo(dynamic ts) {
+    if (ts == null) return '';
+    final dt = (ts as Timestamp).toDate();
+    final d = DateTime.now().difference(dt);
+    if (d.inMinutes < 1) return 'Just now';
+    if (d.inMinutes < 60) return '${d.inMinutes}m ago';
+    if (d.inHours < 24) return '${d.inHours}h ago';
+    if (d.inDays < 7) return '${d.inDays}d ago';
+    return '${dt.day}/${dt.month}/${dt.year}';
   }
 
+  Color _avatarColor(String uid) {
+    if (uid.isEmpty) return brown;
+    return _avatarPalette[uid.codeUnits.first % _avatarPalette.length];
+  }
+
+  void _showSnack(String msg, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
+  void _requireLogin() => _showSnack('Log in to do this', Colors.orange);
+
+  // ── Fetch current user info ───────────────────────────────────────────
+  Future<Map<String, String>> _myInfo() async {
+    if (_uid.isEmpty) return {'name': 'User', 'photo': '', 'initial': 'U'};
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_uid)
+          .get();
+      final name = doc.data()?['username'] as String? ?? 'User';
+      final photo = doc.data()?['profilePhoto'] as String? ?? '';
+      return {
+        'name': name,
+        'photo': photo,
+        'initial': name.isNotEmpty ? name[0].toUpperCase() : 'U',
+      };
+    } catch (_) {
+      return {'name': 'User', 'photo': '', 'initial': 'U'};
+    }
+  }
+
+  // ── Like / Unlike ─────────────────────────────────────────────────────
+  Future<void> _toggleLike(String postId, List likes) async {
+    if (!_isLoggedIn) {
+      _requireLogin();
+      return;
+    }
+    final ref = _postsRef.doc(postId);
+    if (likes.contains(_uid)) {
+      await ref.update({
+        'likes': FieldValue.arrayRemove([_uid]),
+      });
+    } else {
+      await ref.update({
+        'likes': FieldValue.arrayUnion([_uid]),
+      });
+    }
+  }
+
+  // ── Create post ───────────────────────────────────────────────────────
   void _showPostComposer() {
-    final titleController = TextEditingController();
-    final bodyController = TextEditingController();
+    if (!_isLoggedIn) {
+      _requireLogin();
+      return;
+    }
+    final titleCtrl = TextEditingController();
+    final bodyCtrl = TextEditingController();
     String selectedTag = 'Wanted';
+    bool posting = false;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setSheet) => Container(
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setSheet) => Container(
           padding: EdgeInsets.only(
             bottom: MediaQuery.of(context).viewInsets.bottom + 24,
             top: 24,
@@ -256,35 +186,31 @@ class _BookRequestsScreenState extends State<BookRequestsScreen> {
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: _tagColors.entries.map((entry) {
-                    final isSelected = selectedTag == entry.key;
+                  children: _tagColors.entries.map((e) {
+                    final isSel = selectedTag == e.key;
                     return GestureDetector(
-                      onTap: () => setSheet(() => selectedTag = entry.key),
+                      onTap: () => setSheet(() => selectedTag = e.key),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 12,
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: isSelected
-                              ? entry.value.withValues(alpha: 0.15)
+                          color: isSel
+                              ? e.value.withValues(alpha: 0.15)
                               : Colors.grey.shade100,
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: isSelected
-                                ? entry.value
-                                : Colors.grey.shade300,
-                            width: isSelected ? 1.5 : 1,
+                            color: isSel ? e.value : Colors.grey.shade300,
+                            width: isSel ? 1.5 : 1,
                           ),
                         ),
                         child: Text(
-                          entry.key,
+                          e.key,
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: isSelected
-                                ? entry.value
-                                : Colors.grey.shade500,
+                            color: isSel ? e.value : Colors.grey.shade500,
                           ),
                         ),
                       ),
@@ -294,61 +220,86 @@ class _BookRequestsScreenState extends State<BookRequestsScreen> {
                 const SizedBox(height: 16),
 
                 // Title
-                _buildInputField(
-                  controller: titleController,
-                  hint: 'Book title or post headline...',
-                  maxLines: 1,
-                ),
+                _inputField(titleCtrl, 'Book title or post headline...', 1),
                 const SizedBox(height: 12),
 
                 // Body
-                _buildInputField(
-                  controller: bodyController,
-                  hint:
-                      'Describe the book, your budget, location, condition needed...',
-                  maxLines: 4,
+                _inputField(
+                  bodyCtrl,
+                  'Describe the book, your budget, location, condition needed...',
+                  4,
+                ),
+                const SizedBox(height: 12),
+
+                // Image note (Storage requires Blaze)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: Colors.orange.withValues(alpha: 0.2),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.image_outlined,
+                        size: 16,
+                        color: Colors.orange.shade700,
+                      ),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'Photo upload available after Firebase Blaze plan upgrade.',
+                          style: TextStyle(fontSize: 11, color: Colors.black54),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 20),
 
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: () {
-                      if (titleController.text.trim().isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Please add a title')),
-                        );
-                        return;
-                      }
-                      // TODO: Save to Firebase later
-                      final newPost = {
-                        'id': DateTime.now().millisecondsSinceEpoch.toString(),
-                        'userName': 'You',
-                        'userInitial': 'Y',
-                        'userColor': brown,
-                        'timeAgo': 'Just now',
-                        'title': titleController.text.trim(),
-                        'body': bodyController.text.trim(),
-                        'tag': selectedTag,
-                        'tagColor': _tagColors[selectedTag]!,
-                        'likes': 0,
-                        'commentCount': 0,
-                        'isLiked': false,
-                        'comments': [],
-                      };
-                      setState(() => _posts.insert(0, newPost));
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: const Text('Post shared!'),
-                          backgroundColor: const Color(0xFF059669),
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                      );
-                    },
+                    onPressed: posting
+                        ? null
+                        : () async {
+                            if (titleCtrl.text.trim().isEmpty) {
+                              _showSnack(
+                                'Please add a title',
+                                Colors.redAccent,
+                              );
+                              return;
+                            }
+                            setSheet(() => posting = true);
+                            final info = await _myInfo();
+                            await _postsRef.add({
+                              'authorId': _uid,
+                              'authorName': info['name'],
+                              'authorInitial': info['initial'],
+                              'authorColorValue': _avatarColor(_uid).toARGB32(),
+                              'authorPhoto': info['photo'],
+                              'title': titleCtrl.text.trim(),
+                              'body': bodyCtrl.text.trim(),
+                              'tag': selectedTag,
+                              'likes': [],
+                              'commentCount': 0,
+                              'imageUrl': '',
+                              'createdAt': DateTime.now(),
+                            });
+                            if (mounted) {
+                              Navigator.pop(context);
+                              _showSnack(
+                                'Post shared! 🎉',
+                                const Color(0xFF059669),
+                              );
+                            }
+                          },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: brown,
                       foregroundColor: Colors.white,
@@ -357,13 +308,22 @@ class _BookRequestsScreenState extends State<BookRequestsScreen> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: const Text(
-                      'Share Post',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                      ),
-                    ),
+                    child: posting
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text(
+                            'Share Post',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                            ),
+                          ),
                   ),
                 ),
               ],
@@ -374,133 +334,136 @@ class _BookRequestsScreenState extends State<BookRequestsScreen> {
     );
   }
 
-  void _showComments(Map<String, dynamic> post) {
-    final commentController = TextEditingController();
-    final comments = List<Map<String, dynamic>>.from(post['comments'] ?? []);
+  // ── Comments sheet ────────────────────────────────────────────────────
+  void _showComments(String postId, String postTitle) {
+    final commentCtrl = TextEditingController();
+    bool sending = false;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setSheet) => Container(
-          height: MediaQuery.of(context).size.height * 0.8,
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-          ),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
-            children: [
-              // Header
-              Container(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(color: Colors.grey.shade200),
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setSheet) => SizedBox(
+          height: MediaQuery.of(context).size.height * 0.82,
+          child: Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: Column(
+              children: [
+                // Header
+                Container(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(color: Colors.grey.shade200),
+                    ),
                   ),
-                ),
-                child: Column(
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        margin: const EdgeInsets.only(bottom: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade300,
-                          borderRadius: BorderRadius.circular(2),
+                  child: Column(
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade300,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
                         ),
                       ),
-                    ),
-                    Row(
-                      children: [
-                        const Text(
-                          'Comments',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.chat_bubble_outline_rounded,
                             color: brown,
+                            size: 18,
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: brown.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            '${comments.length}',
-                            style: const TextStyle(
-                              fontSize: 12,
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Comments',
+                            style: TextStyle(
+                              fontSize: 16,
                               fontWeight: FontWeight.bold,
                               color: brown,
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    // Post title
-                    Text(
-                      post['title'] as String,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade500,
+                        ],
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-
-              // Comments list
-              Expanded(
-                child: comments.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.chat_bubble_outline,
-                              size: 52,
-                              color: Colors.grey.shade300,
-                            ),
-                            const SizedBox(height: 10),
-                            Text(
-                              'No comments yet',
-                              style: TextStyle(
-                                color: Colors.grey.shade400,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            Text(
-                              'Be the first to reply!',
-                              style: TextStyle(
-                                color: Colors.grey.shade300,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
+                      const SizedBox(height: 4),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          postTitle,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      )
-                    : ListView.builder(
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Comments stream
+                Expanded(
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: _postsRef
+                        .doc(postId)
+                        .collection('comments')
+                        .orderBy('createdAt')
+                        .snapshots(),
+                    builder: (context, snap) {
+                      final docs = snap.data?.docs ?? [];
+                      if (docs.isEmpty) {
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.chat_bubble_outline,
+                                size: 52,
+                                color: Colors.grey.shade300,
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                'No comments yet',
+                                style: TextStyle(
+                                  color: Colors.grey.shade400,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              Text(
+                                'Be the first to reply!',
+                                style: TextStyle(
+                                  color: Colors.grey.shade300,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+                      return ListView.builder(
                         padding: const EdgeInsets.all(16),
-                        itemCount: comments.length,
-                        itemBuilder: (context, index) {
-                          final c = comments[index];
-                          final user = c['user'] as String? ?? 'User';
+                        itemCount: docs.length,
+                        itemBuilder: (_, i) {
+                          final data = docs[i].data() as Map<String, dynamic>;
+                          final name = data['authorName'] as String? ?? 'User';
                           final initial =
-                              c['initial'] as String? ??
-                              (user.isNotEmpty ? user[0].toUpperCase() : 'U');
+                              data['authorInitial'] as String? ?? 'U';
+                          final text = data['text'] as String? ?? '';
+                          final isMe = data['authorId'] == _uid;
+                          final colorVal = data['authorColorValue'] as int?;
+                          final color = colorVal != null
+                              ? Color(colorVal)
+                              : brown;
+
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 14),
                             child: Row(
@@ -508,15 +471,13 @@ class _BookRequestsScreenState extends State<BookRequestsScreen> {
                               children: [
                                 CircleAvatar(
                                   radius: 17,
-                                  backgroundColor: brown.withValues(
-                                    alpha: 0.15,
-                                  ),
+                                  backgroundColor: color.withValues(alpha: 0.2),
                                   child: Text(
                                     initial,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
-                                      color: brown,
+                                      color: color,
                                     ),
                                   ),
                                 ),
@@ -532,26 +493,67 @@ class _BookRequestsScreenState extends State<BookRequestsScreen> {
                                           vertical: 8,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: Colors.grey.shade50,
+                                          color: isMe
+                                              ? brown.withValues(alpha: 0.06)
+                                              : Colors.grey.shade50,
                                           borderRadius: BorderRadius.circular(
                                             14,
                                           ),
+                                          border: isMe
+                                              ? Border.all(
+                                                  color: brown.withValues(
+                                                    alpha: 0.12,
+                                                  ),
+                                                )
+                                              : null,
                                         ),
                                         child: Column(
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,
                                           children: [
-                                            Text(
-                                              user,
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 12,
-                                                color: brown,
-                                              ),
+                                            Row(
+                                              children: [
+                                                Text(
+                                                  name,
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 12,
+                                                    color: brown,
+                                                  ),
+                                                ),
+                                                if (isMe) ...[
+                                                  const SizedBox(width: 6),
+                                                  Container(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 5,
+                                                          vertical: 1,
+                                                        ),
+                                                    decoration: BoxDecoration(
+                                                      color: brown.withValues(
+                                                        alpha: 0.1,
+                                                      ),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            6,
+                                                          ),
+                                                    ),
+                                                    child: const Text(
+                                                      'You',
+                                                      style: TextStyle(
+                                                        fontSize: 9,
+                                                        color: brown,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ],
                                             ),
                                             const SizedBox(height: 3),
                                             Text(
-                                              c['text'] as String? ?? '',
+                                              text,
                                               style: const TextStyle(
                                                 fontSize: 13,
                                                 color: Colors.black87,
@@ -562,7 +564,7 @@ class _BookRequestsScreenState extends State<BookRequestsScreen> {
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        c['time'] as String? ?? '',
+                                        _timeAgo(data['createdAt']),
                                         style: TextStyle(
                                           fontSize: 10,
                                           color: Colors.grey.shade400,
@@ -575,104 +577,171 @@ class _BookRequestsScreenState extends State<BookRequestsScreen> {
                             ),
                           );
                         },
-                      ),
-              ),
+                      );
+                    },
+                  ),
+                ),
 
-              // Comment input
-              Container(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border(top: BorderSide(color: Colors.grey.shade200)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.04),
-                      blurRadius: 6,
-                      offset: const Offset(0, -2),
+                // Input
+                Container(
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    10,
+                    16,
+                    MediaQuery.of(context).viewInsets.bottom + 16,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border(
+                      top: BorderSide(color: Colors.grey.shade200),
                     ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 16,
-                      backgroundColor: brown,
-                      child: const Text(
-                        'Y',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.04),
+                        blurRadius: 6,
+                        offset: const Offset(0, -2),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextField(
-                        controller: commentController,
-                        decoration: InputDecoration(
-                          hintText: 'Write a reply...',
-                          hintStyle: TextStyle(
-                            color: Colors.grey.shade400,
-                            fontSize: 13,
-                          ),
-                          filled: true,
-                          fillColor: Colors.grey.shade100,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 10,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(20),
-                            borderSide: BorderSide.none,
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      // My avatar
+                      CircleAvatar(
+                        radius: 16,
+                        backgroundColor: _isLoggedIn
+                            ? _avatarColor(_uid)
+                            : Colors.grey.shade300,
+                        child: Text(
+                          _isLoggedIn ? '' : '?',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: () {
-                        final text = commentController.text.trim();
-                        if (text.isEmpty) return;
-                        // TODO: Save to Firebase later
-                        setSheet(() {
-                          comments.add({
-                            'user': 'You',
-                            'initial': 'Y',
-                            'text': text,
-                            'time': 'Just now',
-                          });
-                        });
-                        setState(() {
-                          final idx = _posts.indexWhere(
-                            (p) => p['id'] == post['id'],
-                          );
-                          if (idx != -1) {
-                            _posts[idx]['comments'] = comments;
-                            _posts[idx]['commentCount'] = comments.length;
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: commentCtrl,
+                          onTap: () {
+                            if (!_isLoggedIn) _requireLogin();
+                          },
+                          readOnly: !_isLoggedIn,
+                          decoration: InputDecoration(
+                            hintText: _isLoggedIn
+                                ? 'Write a reply...'
+                                : 'Log in to comment',
+                            hintStyle: TextStyle(
+                              color: Colors.grey.shade400,
+                              fontSize: 13,
+                            ),
+                            filled: true,
+                            fillColor: Colors.grey.shade100,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(20),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () async {
+                          if (!_isLoggedIn) {
+                            _requireLogin();
+                            return;
                           }
-                        });
-                        commentController.clear();
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: const BoxDecoration(
-                          color: brown,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.send_rounded,
-                          color: Colors.white,
-                          size: 18,
+                          final text = commentCtrl.text.trim();
+                          if (text.isEmpty || sending) return;
+                          setSheet(() => sending = true);
+                          final info = await _myInfo();
+                          final batch = FirebaseFirestore.instance.batch();
+                          final commentRef = _postsRef
+                              .doc(postId)
+                              .collection('comments')
+                              .doc();
+                          batch.set(commentRef, {
+                            'authorId': _uid,
+                            'authorName': info['name'],
+                            'authorInitial': info['initial'],
+                            'authorColorValue': _avatarColor(_uid).toARGB32(),
+                            'text': text,
+                            'createdAt': FieldValue.serverTimestamp(),
+                          });
+                          batch.update(_postsRef.doc(postId), {
+                            'commentCount': FieldValue.increment(1),
+                          });
+                          await batch.commit();
+                          commentCtrl.clear();
+                          setSheet(() => sending = false);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: sending ? Colors.grey : brown,
+                            shape: BoxShape.circle,
+                          ),
+                          child: sending
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.send_rounded,
+                                  color: Colors.white,
+                                  size: 18,
+                                ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
+      ),
+    );
+  }
+
+  // ── Delete post ───────────────────────────────────────────────────────
+  void _confirmDelete(String postId) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Delete Post',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: const Text('Are you sure you want to delete this post?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: Colors.grey.shade500),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _postsRef.doc(postId).delete();
+              _showSnack('Post deleted', Colors.grey);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
   }
@@ -710,7 +779,7 @@ class _BookRequestsScreenState extends State<BookRequestsScreen> {
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: _filters.map((f) {
-                  final isSelected = _selectedFilter == f;
+                  final isSel = _selectedFilter == f;
                   final color = _tagColors[f] ?? brown;
                   return GestureDetector(
                     onTap: () => setState(() => _selectedFilter = f),
@@ -722,7 +791,7 @@ class _BookRequestsScreenState extends State<BookRequestsScreen> {
                         vertical: 7,
                       ),
                       decoration: BoxDecoration(
-                        color: isSelected
+                        color: isSel
                             ? (f == 'All' ? brown : color)
                             : Colors.grey.shade100,
                         borderRadius: BorderRadius.circular(20),
@@ -732,9 +801,7 @@ class _BookRequestsScreenState extends State<BookRequestsScreen> {
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: isSelected
-                              ? Colors.white
-                              : Colors.grey.shade600,
+                          color: isSel ? Colors.white : Colors.grey.shade600,
                         ),
                       ),
                     ),
@@ -744,10 +811,24 @@ class _BookRequestsScreenState extends State<BookRequestsScreen> {
             ),
           ),
 
-          // Posts list
+          // Posts — real-time Firestore stream
           Expanded(
-            child: _filteredPosts.isEmpty
-                ? Center(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: _selectedFilter == 'All'
+                  ? _postsRef.orderBy('createdAt', descending: true).snapshots()
+                  : _postsRef
+                        .where('tag', isEqualTo: _selectedFilter)
+                        .orderBy('createdAt', descending: true)
+                        .snapshots(),
+              builder: (context, snap) {
+                if (snap.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: CircularProgressIndicator(color: brown),
+                  );
+                }
+                final docs = snap.data?.docs ?? [];
+                if (docs.isEmpty) {
+                  return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -758,7 +839,7 @@ class _BookRequestsScreenState extends State<BookRequestsScreen> {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          'No $_selectedFilter posts yet',
+                          'No ${_selectedFilter == 'All' ? '' : '$_selectedFilter '}posts yet',
                           style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
@@ -773,18 +854,56 @@ class _BookRequestsScreenState extends State<BookRequestsScreen> {
                             color: Colors.grey.shade400,
                           ),
                         ),
+                        const SizedBox(height: 20),
+                        ElevatedButton.icon(
+                          onPressed: _showPostComposer,
+                          icon: const Icon(
+                            Icons.edit_rounded,
+                            color: Colors.white,
+                          ),
+                          label: const Text(
+                            'Post a Request',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: brown,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 12,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _filteredPosts.length,
-                    itemBuilder: (context, index) =>
-                        _buildPostCard(_filteredPosts[index]),
+                  );
+                }
+                return ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                  itemCount: docs.length,
+                  itemBuilder: (_, i) => _PostCard(
+                    postId: docs[i].id,
+                    data: docs[i].data() as Map<String, dynamic>,
+                    uid: _uid,
+                    tagColors: _tagColors,
+                    timeAgo: _timeAgo,
+                    avatarColor: _avatarColor,
+                    onLike: _toggleLike,
+                    onComment: _showComments,
+                    onDelete: _confirmDelete,
                   ),
+                );
+              },
+            ),
           ),
         ],
       ),
+
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showPostComposer,
         backgroundColor: brown,
@@ -797,9 +916,82 @@ class _BookRequestsScreenState extends State<BookRequestsScreen> {
     );
   }
 
-  Widget _buildPostCard(Map<String, dynamic> post) {
-    final tagColor = post['tagColor'] as Color;
-    final userColor = post['userColor'] as Color;
+  Widget _inputField(TextEditingController ctrl, String hint, int maxLines) {
+    return TextField(
+      controller: ctrl,
+      maxLines: maxLines,
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+        filled: true,
+        fillColor: Colors.grey.shade50,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 12,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade200),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade200),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: brown, width: 1.5),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Post Card — reads live data, handles like/comment/delete
+// ─────────────────────────────────────────────────────────────────────────────
+class _PostCard extends StatelessWidget {
+  final String postId;
+  final Map<String, dynamic> data;
+  final String uid;
+  final Map<String, Color> tagColors;
+  final String Function(dynamic) timeAgo;
+  final Color Function(String) avatarColor;
+  final Future<void> Function(String, List) onLike;
+  final void Function(String, String) onComment;
+  final void Function(String) onDelete;
+
+  const _PostCard({
+    required this.postId,
+    required this.data,
+    required this.uid,
+    required this.tagColors,
+    required this.timeAgo,
+    required this.avatarColor,
+    required this.onLike,
+    required this.onComment,
+    required this.onDelete,
+  });
+
+  static const brown = Color(0xFF613613);
+
+  @override
+  Widget build(BuildContext context) {
+    final name = data['authorName'] as String? ?? 'User';
+    final initial = data['authorInitial'] as String? ?? 'U';
+    final colorVal = data['authorColorValue'] as int?;
+    final authorColor = colorVal != null
+        ? Color(colorVal)
+        : avatarColor(data['authorId'] ?? '');
+    final tag = data['tag'] as String? ?? 'Wanted';
+    final tagColor = tagColors[tag] ?? brown;
+    final title = data['title'] as String? ?? '';
+    final body = data['body'] as String? ?? '';
+    final likes = List.from(data['likes'] ?? []);
+    final commentCount = data['commentCount'] as int? ?? 0;
+    final isLiked = likes.contains(uid);
+    final isMe = data['authorId'] == uid;
+    final imageUrl = data['imageUrl'] as String? ?? '';
+    final ts = data['createdAt'];
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -819,16 +1011,16 @@ class _BookRequestsScreenState extends State<BookRequestsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // User row
+            // ── User row ────────────────────────────────────────────────
             Row(
               children: [
                 CircleAvatar(
                   radius: 19,
-                  backgroundColor: userColor,
+                  backgroundColor: authorColor.withValues(alpha: 0.2),
                   child: Text(
-                    post['userInitial'] as String,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    initial,
+                    style: TextStyle(
+                      color: authorColor,
                       fontWeight: FontWeight.bold,
                       fontSize: 14,
                     ),
@@ -839,16 +1031,41 @@ class _BookRequestsScreenState extends State<BookRequestsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        post['userName'] as String,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                          color: Colors.black87,
-                        ),
+                      Row(
+                        children: [
+                          Text(
+                            name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          if (isMe) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: brown.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text(
+                                'You',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  color: brown,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                       Text(
-                        post['timeAgo'] as String,
+                        timeAgo(ts),
                         style: TextStyle(
                           fontSize: 11,
                           color: Colors.grey.shade400,
@@ -869,7 +1086,7 @@ class _BookRequestsScreenState extends State<BookRequestsScreen> {
                     border: Border.all(color: tagColor.withValues(alpha: 0.35)),
                   ),
                   child: Text(
-                    post['tag'] as String,
+                    tag,
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
@@ -877,25 +1094,42 @@ class _BookRequestsScreenState extends State<BookRequestsScreen> {
                     ),
                   ),
                 ),
+                // More menu (own posts only)
+                if (isMe) ...[
+                  const SizedBox(width: 4),
+                  GestureDetector(
+                    onTap: () => onDelete(postId),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.redAccent.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.delete_outline_rounded,
+                        size: 16,
+                        color: Colors.redAccent,
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: 12),
 
-            // Title
+            // ── Title ───────────────────────────────────────────────────
             Text(
-              post['title'] as String,
+              title,
               style: const TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 15,
                 color: Colors.black87,
               ),
             ),
-            const SizedBox(height: 5),
-
-            // Body
-            if ((post['body'] as String).isNotEmpty)
+            if (body.isNotEmpty) ...[
+              const SizedBox(height: 5),
               Text(
-                post['body'] as String,
+                body,
                 style: TextStyle(
                   fontSize: 13,
                   color: Colors.grey.shade600,
@@ -904,46 +1138,54 @@ class _BookRequestsScreenState extends State<BookRequestsScreen> {
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
               ),
+            ],
+
+            // ── Image (if present) ───────────────────────────────────────
+            if (imageUrl.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.network(
+                  imageUrl,
+                  height: 180,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const SizedBox(),
+                ),
+              ),
+            ],
 
             const SizedBox(height: 12),
             Divider(height: 1, color: Colors.grey.shade100),
             const SizedBox(height: 10),
 
-            // Action row
+            // ── Action row ───────────────────────────────────────────────
             Row(
               children: [
                 // Like
                 GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      final idx = _posts.indexWhere(
-                        (p) => p['id'] == post['id'],
-                      );
-                      if (idx != -1) {
-                        final liked = _posts[idx]['isLiked'] as bool;
-                        _posts[idx]['isLiked'] = !liked;
-                        _posts[idx]['likes'] =
-                            ((_posts[idx]['likes'] as int) + (liked ? -1 : 1));
-                      }
-                    });
-                  },
+                  onTap: () => onLike(postId, likes),
                   child: Row(
                     children: [
-                      Icon(
-                        post['isLiked'] as bool
-                            ? Icons.favorite_rounded
-                            : Icons.favorite_border_rounded,
-                        size: 20,
-                        color: post['isLiked'] as bool
-                            ? Colors.redAccent
-                            : Colors.grey.shade400,
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 200),
+                        child: Icon(
+                          isLiked
+                              ? Icons.favorite_rounded
+                              : Icons.favorite_border_rounded,
+                          key: ValueKey(isLiked),
+                          size: 20,
+                          color: isLiked
+                              ? Colors.redAccent
+                              : Colors.grey.shade400,
+                        ),
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        '${post['likes']}',
+                        '${likes.length}',
                         style: TextStyle(
                           fontSize: 13,
-                          color: post['isLiked'] as bool
+                          color: isLiked
                               ? Colors.redAccent
                               : Colors.grey.shade500,
                           fontWeight: FontWeight.w500,
@@ -956,7 +1198,7 @@ class _BookRequestsScreenState extends State<BookRequestsScreen> {
 
                 // Comment
                 GestureDetector(
-                  onTap: () => _showComments(post),
+                  onTap: () => onComment(postId, title),
                   child: Row(
                     children: [
                       Icon(
@@ -966,7 +1208,7 @@ class _BookRequestsScreenState extends State<BookRequestsScreen> {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        '${post['commentCount']}',
+                        '$commentCount',
                         style: TextStyle(
                           fontSize: 13,
                           color: Colors.grey.shade500,
@@ -993,77 +1235,88 @@ class _BookRequestsScreenState extends State<BookRequestsScreen> {
               ],
             ),
 
-            // First comment preview
-            if ((post['comments'] as List).isNotEmpty) ...[
+            // ── Comment preview ──────────────────────────────────────────
+            if (commentCount > 0) ...[
               const SizedBox(height: 10),
-              GestureDetector(
-                onTap: () => _showComments(post),
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      CircleAvatar(
-                        radius: 13,
-                        backgroundColor: brown.withValues(alpha: 0.15),
-                        child: Text(
-                          ((post['comments'] as List).first['initial']
-                                  as String? ??
-                              ((post['comments'] as List).first['user']
-                                          as String? ??
-                                      'U')[0]
-                                  .toUpperCase()),
-                          style: const TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                            color: brown,
-                          ),
-                        ),
+              StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('book_requests')
+                    .doc(postId)
+                    .collection('comments')
+                    .orderBy('createdAt', descending: true)
+                    .limit(1)
+                    .snapshots(),
+                builder: (_, snap) {
+                  final docs = snap.data?.docs ?? [];
+                  if (docs.isEmpty) return const SizedBox();
+                  final c = docs.first.data() as Map<String, dynamic>;
+                  final cName = c['authorName'] as String? ?? 'User';
+                  final cText = c['text'] as String? ?? '';
+                  final cInit = c['authorInitial'] as String? ?? 'U';
+                  final cCol = c['authorColorValue'] as int?;
+                  final cColor = cCol != null ? Color(cCol) : Colors.grey;
+                  return GestureDetector(
+                    onTap: () => onComment(postId, title),
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: RichText(
-                          text: TextSpan(
-                            children: [
-                              TextSpan(
-                                text:
-                                    '${(post['comments'] as List).first['user']}  ',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                  color: Colors.black87,
-                                ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          CircleAvatar(
+                            radius: 13,
+                            backgroundColor: cColor.withValues(alpha: 0.2),
+                            child: Text(
+                              cInit,
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: cColor,
                               ),
-                              TextSpan(
-                                text:
-                                    (post['comments'] as List).first['text']
-                                        as String,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey.shade600,
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: RichText(
+                              text: TextSpan(
+                                children: [
+                                  TextSpan(
+                                    text: '$cName  ',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                  TextSpan(
+                                    text: cText,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
+                    ),
+                  );
+                },
               ),
-              if ((post['commentCount'] as int) > 1)
+              if (commentCount > 1)
                 Padding(
                   padding: const EdgeInsets.only(top: 6, left: 4),
                   child: GestureDetector(
-                    onTap: () => _showComments(post),
+                    onTap: () => onComment(postId, title),
                     child: Text(
-                      'View all ${post['commentCount']} comments',
+                      'View all $commentCount comments',
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey.shade400,
@@ -1074,39 +1327,6 @@ class _BookRequestsScreenState extends State<BookRequestsScreen> {
                 ),
             ],
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInputField({
-    required TextEditingController controller,
-    required String hint,
-    required int maxLines,
-  }) {
-    return TextField(
-      controller: controller,
-      maxLines: maxLines,
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
-        filled: true,
-        fillColor: Colors.grey.shade50,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 12,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade200),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade200),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: brown, width: 1.5),
         ),
       ),
     );
