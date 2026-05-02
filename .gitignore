@@ -43,3 +43,21 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Android Gradle
+/android/.gradle/
+local.properties
+
+# Generated code
+*.g.dart
+
+# Environment variables
+.env
+
+# Platform-specific ephemeral files
+/macos/Flutter/ephemeral/
+/windows/flutter/ephemeral/
+/linux/flutter/ephemeral/
+
+# macOS / iOS specific
+/macos/Pods/
