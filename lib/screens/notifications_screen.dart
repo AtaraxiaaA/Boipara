@@ -217,6 +217,139 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
+  // ── Post like / comment detail sheet ─────────────────────────────────
+  void _showPostNotifDetails(Map<String, dynamic> data, String docId) {
+    final type = data['type'] ?? '';
+    final isLike = type == 'post_like';
+    final color = isLike ? Colors.redAccent : const Color(0xFF7C3AED);
+    final icon = isLike
+        ? Icons.favorite_rounded
+        : Icons.chat_bubble_outline_rounded;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 32),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              data['title'] ?? '',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: brown,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              data['body'] ?? '',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade600,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Comment preview
+            if (!isLike && (data['comment'] ?? '').toString().isNotEmpty) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: color.withValues(alpha: 0.2)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if ((data['postTitle'] ?? '').toString().isNotEmpty)
+                      Text(
+                        'On: ${data['postTitle']}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade400,
+                          fontStyle: FontStyle.italic,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '"${data['comment']}"',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey.shade700,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            Text(
+              _timeAgo(data['createdAt']),
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade400),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () => Navigator.pop(context),
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: Colors.grey.shade300),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: Text(
+                  'Close',
+                  style: TextStyle(
+                    color: Colors.grey.shade600,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ── Order detail sheet WITH seller management ─────────────────────────
   void _showOrderDetails(Map<String, dynamic> data, String docId) async {
     await _markRead(docId);
@@ -792,6 +925,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         return Icons.help_outline_rounded;
       case 'new_answer':
         return Icons.chat_bubble_rounded;
+      case 'post_like':
+        return Icons.favorite_rounded;
+      case 'post_comment':
+        return Icons.chat_bubble_outline_rounded;
       default:
         return Icons.notifications_rounded;
     }
@@ -805,6 +942,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         return const Color(0xFF0E7490);
       case 'new_answer':
         return accentOrange;
+      case 'post_like':
+        return Colors.redAccent;
+      case 'post_comment':
+        return const Color(0xFF7C3AED);
       default:
         return brown;
     }
@@ -818,6 +959,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         return 'Tap to view & answer the question';
       case 'new_answer':
         return 'Tap to view the answer & reply';
+      case 'post_like':
+        return 'Someone liked your post';
+      case 'post_comment':
+        return 'Tap to view the comment';
       default:
         return 'Tap to open';
     }
@@ -1006,6 +1151,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       _showOrderDetails(data, docId);
                     } else if (type == 'new_question' || type == 'new_answer') {
                       _goToBookQA(data, docId);
+                    } else if (type == 'post_like' || type == 'post_comment') {
+                      _markRead(docId);
+                      _showPostNotifDetails(data, docId);
                     } else {
                       _markRead(docId);
                     }

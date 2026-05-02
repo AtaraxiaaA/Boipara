@@ -12,6 +12,7 @@ import 'my_book_clubs_screen.dart';
 import 'notifications_screen.dart';
 import 'help_support_screen.dart';
 import 'admin_screen.dart';
+import 'settings_screen.dart'; // ← NEW
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -22,10 +23,15 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   static const green = Color(0xFF2D5A27);
+  static const darkBrown = Color(0xFF613613);
   static const accentOrange = Color(0xFFE07B39);
 
   Map<String, dynamic>? _userData;
   bool _isLoading = true;
+
+  // Firestore-backed stats
+  int _booksSold = 0;
+  int _booksBought = 0;
 
   @override
   void initState() {
@@ -47,7 +53,6 @@ class _ProfilePageState extends State<ProfilePage> {
       if (doc.exists) {
         setState(() => _userData = doc.data());
       } else {
-        // Fallback for Google users
         setState(() {
           _userData = {
             'username':
@@ -57,7 +62,30 @@ class _ProfilePageState extends State<ProfilePage> {
           };
         });
       }
-    } catch (e) {
+
+      // Load live stats: books sold (seller) & bought (buyer)
+      final db = FirebaseFirestore.instance;
+      final uid = user.uid;
+
+      final soldQuery = await db
+          .collection('orders')
+          .where('sellerId', isEqualTo: uid)
+          .where('status', isEqualTo: 'delivered')
+          .get();
+
+      final boughtQuery = await db
+          .collection('orders')
+          .where('buyerId', isEqualTo: uid)
+          .where('status', isEqualTo: 'delivered')
+          .get();
+
+      if (mounted) {
+        setState(() {
+          _booksSold = soldQuery.docs.length;
+          _booksBought = boughtQuery.docs.length;
+        });
+      }
+    } catch (_) {
       // ignore
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -70,9 +98,33 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _logout() async {
-    await FirebaseAuth.instance.signOut();
-    if (mounted) {
-      Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Log Out',
+          style: TextStyle(color: darkBrown, fontWeight: FontWeight.bold),
+        ),
+        content: const Text('Are you sure you want to log out?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: darkBrown),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Log Out', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await FirebaseAuth.instance.signOut();
+      if (mounted) {
+        Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+      }
     }
   }
 
@@ -97,12 +149,13 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
         centerTitle: true,
         actions: [
-          // Admin Panel access via settings icon
+          // ── Settings gear → SettingsScreen ──────────────────
           IconButton(
             icon: const Icon(Icons.settings_outlined, color: Colors.white),
+            tooltip: 'Settings',
             onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const AdminScreen()),
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
             ),
           ),
         ],
@@ -112,7 +165,7 @@ class _ProfilePageState extends State<ProfilePage> {
           : SingleChildScrollView(
               child: Column(
                 children: [
-                  // ── Profile Header ──────────────────────────────────
+                  // ── Profile Header ───────────────────────────
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(24),
@@ -124,7 +177,6 @@ class _ProfilePageState extends State<ProfilePage> {
                     ),
                     child: Column(
                       children: [
-                        // Profile picture
                         GestureDetector(
                           onTap: () async {
                             await Navigator.push(
@@ -186,7 +238,6 @@ class _ProfilePageState extends State<ProfilePage> {
                           ),
                         ),
                         const SizedBox(height: 16),
-
                         Text(
                           username,
                           style: const TextStyle(
@@ -205,11 +256,11 @@ class _ProfilePageState extends State<ProfilePage> {
                         ),
                         const SizedBox(height: 16),
 
-                        // Stats row
+                        // Live stats
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            _buildStatItem('0', 'Books Sold'),
+                            _buildStatItem(_booksSold.toString(), 'Books Sold'),
                             Container(
                               height: 40,
                               width: 1,
@@ -218,7 +269,10 @@ class _ProfilePageState extends State<ProfilePage> {
                                 horizontal: 24,
                               ),
                             ),
-                            _buildStatItem('0', 'Books Bought'),
+                            _buildStatItem(
+                              _booksBought.toString(),
+                              'Books Bought',
+                            ),
                             Container(
                               height: 40,
                               width: 1,
@@ -236,7 +290,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
                   const SizedBox(height: 24),
 
-                  // ── Menu Items ──────────────────────────────────────
+                  // ── Menu Items ───────────────────────────────
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Column(
@@ -338,7 +392,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
                         const SizedBox(height: 24),
 
-                        // Settings
+                        // Quick Settings
                         _buildSectionTitle('Settings'),
                         const SizedBox(height: 12),
                         _buildMenuItem(
@@ -377,6 +431,18 @@ class _ProfilePageState extends State<ProfilePage> {
                             ),
                           ),
                         ),
+                        // Full settings page
+                        _buildMenuItem(
+                          icon: Icons.settings_outlined,
+                          title: 'All Settings',
+                          subtitle: 'Privacy, security, app preferences',
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const SettingsScreen(),
+                            ),
+                          ),
+                        ),
                         _buildMenuItem(
                           icon: Icons.help_outline_rounded,
                           title: 'Help & Support',
@@ -391,7 +457,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
                         const SizedBox(height: 24),
 
-                        // Admin Panel shortcut
+                        // Admin panel — only show for admins (ideally check a claim/role)
                         _buildMenuItem(
                           icon: Icons.admin_panel_settings_outlined,
                           title: 'Admin Panel',
@@ -443,36 +509,29 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildSectionTitle(String title) {
-    return Text(
-      title,
-      style: const TextStyle(
-        fontSize: 16,
-        fontWeight: FontWeight.bold,
-        color: green,
-      ),
-    );
-  }
+  Widget _buildSectionTitle(String title) => Text(
+    title,
+    style: const TextStyle(
+      fontSize: 16,
+      fontWeight: FontWeight.bold,
+      color: green,
+    ),
+  );
 
-  Widget _buildStatItem(String value, String label) {
-    return Column(
-      children: [
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
+  Widget _buildStatItem(String value, String label) => Column(
+    children: [
+      Text(
+        value,
+        style: const TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
         ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 12, color: Colors.white70),
-        ),
-      ],
-    );
-  }
+      ),
+      const SizedBox(height: 4),
+      Text(label, style: const TextStyle(fontSize: 12, color: Colors.white70)),
+    ],
+  );
 
   Widget _buildMenuItem({
     required IconData icon,

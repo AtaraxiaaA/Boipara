@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'addresses_screen.dart';
 import 'guest_guard.dart';
+import 'notif_helper.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Cart singleton
@@ -1092,7 +1093,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     }
   }
 
-  // ── Post question → notify seller ─────────────────────────────────────
+  // ── Post question → notify seller (respects seller's qa preference) ───
   Future<void> _postQuestion() async {
     final q = _questionCtrl.text.trim();
     if (q.isEmpty) return;
@@ -1113,25 +1114,22 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
             'answers': [],
           });
 
-      // Notify seller — only if buyer ≠ seller
+      // Notify seller — only if buyer ≠ seller, respects qa preference
       final sellerId = widget.book['sellerId'] ?? '';
       if (sellerId.isNotEmpty && sellerId != _uid) {
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(sellerId)
-            .collection('notifications')
-            .add({
-              'type': 'new_question',
-              'title': '❓ New Question',
-              'body': '$name asked: "$q"',
-              'bookId': widget.book['id'],
-              'bookName': widget.book['bookName'] ?? '',
-              'askerId': _uid,
-              'askerName': name,
-              'question': q,
-              'isRead': false,
-              'createdAt': FieldValue.serverTimestamp(),
-            });
+        await NotifHelper.sendNewQuestion(
+          sellerId: sellerId,
+          payload: {
+            'type': 'new_question',
+            'title': '❓ New Question',
+            'body': '$name asked: "$q"',
+            'bookId': widget.book['id'],
+            'bookName': widget.book['bookName'] ?? '',
+            'askerId': _uid,
+            'askerName': name,
+            'question': q,
+          },
+        );
       }
 
       _questionCtrl.clear();
@@ -1170,27 +1168,25 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
       });
       await qRef.update({'answers': existing});
 
-      // Notify the original asker — only if they're not the one answering
+      // Notify the original asker — only if they're not the one answering,
+      // respects asker's qa preference
       if (askerId.isNotEmpty && askerId != _uid) {
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(askerId)
-            .collection('notifications')
-            .add({
-              'type': 'new_answer',
-              'title': _isMe
-                  ? '💬 Seller replied to your question'
-                  : '💬 Someone answered your question',
-              'body': '$name answered: "${answerText.trim()}"',
-              'bookId': widget.book['id'],
-              'bookName': widget.book['bookName'] ?? '',
-              'question': question,
-              'answer': answerText.trim(),
-              'answererName': name,
-              'isSeller': _isMe,
-              'isRead': false,
-              'createdAt': FieldValue.serverTimestamp(),
-            });
+        await NotifHelper.sendNewAnswer(
+          askerId: askerId,
+          payload: {
+            'type': 'new_answer',
+            'title': _isMe
+                ? '💬 Seller replied to your question'
+                : '💬 Someone answered your question',
+            'body': '$name answered: "${answerText.trim()}"',
+            'bookId': widget.book['id'],
+            'bookName': widget.book['bookName'] ?? '',
+            'question': question,
+            'answer': answerText.trim(),
+            'answererName': name,
+            'isSeller': _isMe,
+          },
+        );
       }
     } catch (e) {
       _showSnack('Failed to post answer', Colors.redAccent);
@@ -1346,37 +1342,34 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
         buyerPhone = bd.data()?['mobile'] ?? '';
       } catch (_) {}
 
-      // In-app notification → seller
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.book['sellerId'])
-          .collection('notifications')
-          .add({
-            'type': 'new_order',
-            'title': '📦 New Order!',
-            'body': '$buyerName wants to buy "${widget.book['bookName']}"',
-            'bookId': widget.book['id'],
-            'bookName': widget.book['bookName'],
-            'authorName': widget.book['authorName'] ?? '',
-            'askingPrice': widget.book['askingPrice'],
-            'buyerId': uid,
-            'buyerName': buyerName,
-            'buyerPhone': buyerPhone,
-            'paymentMethod': _selectedPayment,
-            'deliveryAddress': {
-              'name': _selectedAddr!['name'] ?? '',
-              'phone': _selectedAddr!['phone'] ?? '',
-              'backup1': _selectedAddr!['backup1'] ?? '',
-              'backup2': _selectedAddr!['backup2'] ?? '',
-              'street': _selectedAddr!['street'] ?? '',
-              'upazila': _selectedAddr!['upazila'] ?? '',
-              'district': _selectedAddr!['district'] ?? '',
-              'division': _selectedAddr!['division'] ?? '',
-              'postalCode': _selectedAddr!['postalCode'] ?? '',
-            },
-            'isRead': false,
-            'createdAt': FieldValue.serverTimestamp(),
-          });
+      // In-app notification → seller (respects seller's orders preference)
+      await NotifHelper.sendNewOrder(
+        sellerId: widget.book['sellerId'],
+        payload: {
+          'type': 'new_order',
+          'title': '📦 New Order!',
+          'body': '$buyerName wants to buy "${widget.book['bookName']}"',
+          'bookId': widget.book['id'],
+          'bookName': widget.book['bookName'],
+          'authorName': widget.book['authorName'] ?? '',
+          'askingPrice': widget.book['askingPrice'],
+          'buyerId': uid,
+          'buyerName': buyerName,
+          'buyerPhone': buyerPhone,
+          'paymentMethod': _selectedPayment,
+          'deliveryAddress': {
+            'name': _selectedAddr!['name'] ?? '',
+            'phone': _selectedAddr!['phone'] ?? '',
+            'backup1': _selectedAddr!['backup1'] ?? '',
+            'backup2': _selectedAddr!['backup2'] ?? '',
+            'street': _selectedAddr!['street'] ?? '',
+            'upazila': _selectedAddr!['upazila'] ?? '',
+            'district': _selectedAddr!['district'] ?? '',
+            'division': _selectedAddr!['division'] ?? '',
+            'postalCode': _selectedAddr!['postalCode'] ?? '',
+          },
+        },
+      );
 
       // Email
       try {

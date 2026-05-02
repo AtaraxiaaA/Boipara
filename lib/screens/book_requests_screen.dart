@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'notif_helper.dart';
 
 class BookRequestsScreen extends StatefulWidget {
   const BookRequestsScreen({super.key});
@@ -103,13 +104,14 @@ class _BookRequestsScreenState extends State<BookRequestsScreen> {
   }
 
   // ── Like / Unlike ─────────────────────────────────────────────────────
-  Future<void> _toggleLike(String postId, List likes) async {
+  Future<void> _toggleLike(String postId, List likes, String authorId) async {
     if (!_isLoggedIn) {
       _requireLogin();
       return;
     }
     final ref = _postsRef.doc(postId);
-    if (likes.contains(_uid)) {
+    final alreadyLiked = likes.contains(_uid);
+    if (alreadyLiked) {
       await ref.update({
         'likes': FieldValue.arrayRemove([_uid]),
       });
@@ -117,6 +119,20 @@ class _BookRequestsScreenState extends State<BookRequestsScreen> {
       await ref.update({
         'likes': FieldValue.arrayUnion([_uid]),
       });
+      // Notify post author — skip own, respects author's likes preference
+      if (authorId.isNotEmpty && authorId != _uid) {
+        final info = await _myInfo();
+        await NotifHelper.sendPostLike(
+          authorId: authorId,
+          payload: {
+            'type': 'post_like',
+            'title': '❤️ Someone liked your post',
+            'body': '${info["name"]} liked your post',
+            'postId': postId,
+            'likerName': info['name'],
+          },
+        );
+      }
     }
   }
 
@@ -290,7 +306,7 @@ class _BookRequestsScreenState extends State<BookRequestsScreen> {
                               'likes': [],
                               'commentCount': 0,
                               'imageUrl': '',
-                              'createdAt': DateTime.now(),
+                              'createdAt': FieldValue.serverTimestamp(),
                             });
                             if (mounted) {
                               Navigator.pop(context);
@@ -335,7 +351,7 @@ class _BookRequestsScreenState extends State<BookRequestsScreen> {
   }
 
   // ── Comments sheet ────────────────────────────────────────────────────
-  void _showComments(String postId, String postTitle) {
+  void _showComments(String postId, String postTitle, String authorId) {
     final commentCtrl = TextEditingController();
     bool sending = false;
 
@@ -677,6 +693,22 @@ class _BookRequestsScreenState extends State<BookRequestsScreen> {
                             'commentCount': FieldValue.increment(1),
                           });
                           await batch.commit();
+                          // Notify post author — skip own, respects
+                          // author's comments preference
+                          if (authorId.isNotEmpty && authorId != _uid) {
+                            await NotifHelper.sendPostComment(
+                              authorId: authorId,
+                              payload: {
+                                'type': 'post_comment',
+                                'title': '💬 New comment on your post',
+                                'body': '${info['name']} commented: "$text"',
+                                'postId': postId,
+                                'postTitle': postTitle,
+                                'commenterName': info['name'],
+                                'comment': text,
+                              },
+                            );
+                          }
                           commentCtrl.clear();
                           setSheet(() => sending = false);
                         },
@@ -956,8 +988,8 @@ class _PostCard extends StatelessWidget {
   final Map<String, Color> tagColors;
   final String Function(dynamic) timeAgo;
   final Color Function(String) avatarColor;
-  final Future<void> Function(String, List) onLike;
-  final void Function(String, String) onComment;
+  final Future<void> Function(String, List, String) onLike;
+  final void Function(String, String, String) onComment;
   final void Function(String) onDelete;
 
   const _PostCard({
@@ -1164,7 +1196,8 @@ class _PostCard extends StatelessWidget {
               children: [
                 // Like
                 GestureDetector(
-                  onTap: () => onLike(postId, likes),
+                  onTap: () =>
+                      onLike(postId, likes, data['authorId'] as String? ?? ''),
                   child: Row(
                     children: [
                       AnimatedSwitcher(
@@ -1198,7 +1231,11 @@ class _PostCard extends StatelessWidget {
 
                 // Comment
                 GestureDetector(
-                  onTap: () => onComment(postId, title),
+                  onTap: () => onComment(
+                    postId,
+                    title,
+                    data['authorId'] as String? ?? '',
+                  ),
                   child: Row(
                     children: [
                       Icon(
@@ -1256,7 +1293,11 @@ class _PostCard extends StatelessWidget {
                   final cCol = c['authorColorValue'] as int?;
                   final cColor = cCol != null ? Color(cCol) : Colors.grey;
                   return GestureDetector(
-                    onTap: () => onComment(postId, title),
+                    onTap: () => onComment(
+                      postId,
+                      title,
+                      data['authorId'] as String? ?? '',
+                    ),
                     child: Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
@@ -1314,7 +1355,11 @@ class _PostCard extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(top: 6, left: 4),
                   child: GestureDetector(
-                    onTap: () => onComment(postId, title),
+                    onTap: () => onComment(
+                      postId,
+                      title,
+                      data['authorId'] as String? ?? '',
+                    ),
                     child: Text(
                       'View all $commentCount comments',
                       style: TextStyle(
