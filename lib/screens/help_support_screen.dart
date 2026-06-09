@@ -1,4 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+// ─────────────────────────────────────────────────────────────
+// NO API KEY NEEDED — 100% offline, rule-based chatbot
+// Only dependency needed: url_launcher (already in your pubspec)
+// ─────────────────────────────────────────────────────────────
 
 class HelpSupportScreen extends StatefulWidget {
   const HelpSupportScreen({super.key});
@@ -8,591 +14,1011 @@ class HelpSupportScreen extends StatefulWidget {
 }
 
 class _HelpSupportScreenState extends State<HelpSupportScreen> {
-  static const brown = Color(0xFF613613);
-  static const accentOrange = Color(0xFFE07B39);
-  static const backgroundColor = Color(0xFFF5F0E9);
+  static const _email = 'officialboipara@gmail.com';
+  static const _whatsapp = '8801410651007';
+  static const _facebook =
+      'https://www.facebook.com/profile.php?id=61581000306072';
 
-  int? _expandedFaq;
+  static const _brown = Color(0xFF613613);
+  static const _bg = Color(0xFFF5F0E9);
 
-  final List<Map<String, dynamic>> _faqs = [
-    {
-      'question': 'How do I sell a book?',
-      'answer':
-          'Tap "Sell a Book" from the home screen. Fill in the book title, author, condition, edition, and your asking price. Once submitted, your listing will be visible to all buyers after verification.',
-    },
-    {
-      'question': 'How does delivery work?',
-      'answer':
-          'Once a buyer purchases your book, our delivery partner will pick it up from your address. You can track the delivery status from the "Track Delivery" section.',
-    },
-    {
-      'question': 'What payment methods are supported?',
-      'answer':
-          'We currently support bKash, Nagad, and Bank Transfer. You can manage your payment methods from the Payment Methods section in your profile.',
-    },
-    {
-      'question': 'How do I get paid after a sale?',
-      'answer':
-          'Once the buyer confirms delivery, the payment will be transferred to your registered bKash, Nagad, or bank account within 1–2 business days.',
-    },
-    {
-      'question': 'Can I return a book?',
-      'answer':
-          'Returns are accepted within 3 days of delivery if the book condition is significantly different from what was listed. Contact our support team to initiate a return.',
-    },
-    {
-      'question': 'How do I join a Book Club?',
-      'answer':
-          'Go to the Clubs tab from the bottom navigation or browse clubs from the homepage. Tap on any club and join. You can also create your own club!',
-    },
-    {
-      'question': 'What does "Verified" condition mean?',
-      'answer':
-          'All books go through a quick review before listing goes live. "Verified" means our team has confirmed the condition matches the seller\'s description.',
-    },
+  final List<_FaqItem> _faqs = [
+    _FaqItem(
+      q: 'How do I sell a book?',
+      a: 'Go to the homepage and tap "Sell". Fill in your book details (name, author, condition, price), choose your payment method, and submit. Our team will review and approve it within 24 hours.',
+    ),
+    _FaqItem(
+      q: 'How does delivery work?',
+      a: 'After a buyer places an order, the seller packages the book. You can track every step live in "Track Delivery". Typical delivery is 2–5 business days inside Bangladesh.',
+    ),
+    _FaqItem(
+      q: 'What payment methods are supported?',
+      a: 'We support bKash, Nagad, Bank Transfer, and Cash on Delivery. Manage your payment methods from your Profile page.',
+    ),
+    _FaqItem(
+      q: 'How do I get paid after a sale?',
+      a: 'Once the order is marked "Delivered", payment is transferred to your registered bKash/Nagad/bank account within 1–2 business days.',
+    ),
+    _FaqItem(
+      q: 'Can I return a book?',
+      a: 'Returns are accepted within 3 days of delivery if the book condition significantly differs from the listing. Contact support with photos and your order ID.',
+    ),
+    _FaqItem(
+      q: 'How do I join a Book Club?',
+      a: 'Tap "Clubs" in the bottom navigation bar. Browse available clubs and tap "Join". You can also create your own club by tapping the "+" button.',
+    ),
+    _FaqItem(
+      q: 'How do I publish my own book?',
+      a: 'Tap "Publish" on the homepage. Fill in your manuscript details and submit for review. Boipara handles distribution — you earn royalties on every sale.',
+    ),
+    _FaqItem(
+      q: 'Is my payment information secure?',
+      a: 'Yes. We never store your full payment credentials. All transactions go through licensed payment gateways and are encrypted in transit.',
+    ),
   ];
 
-  final List<Map<String, dynamic>> _contactOptions = [
-    {
-      'title': 'Email Us',
-      'subtitle': 'support@boipara.com.bd',
-      'icon': Icons.email_outlined,
-      'color': Color(0xFF1E3A8A),
-    },
-    {
-      'title': 'Call Us',
-      'subtitle': '+880 1800-BOIPARA',
-      'icon': Icons.phone_outlined,
-      'color': Color(0xFF059669),
-    },
-    {
-      'title': 'Facebook',
-      'subtitle': 'fb.com/boiparabd',
-      'icon': Icons.facebook_rounded,
-      'color': Color(0xFF1877F2),
-    },
-  ];
+  Future<void> _launchEmail() async {
+    final uri = Uri(
+      scheme: 'mailto',
+      path: _email,
+      queryParameters: {
+        'subject': 'Boipara Support Request',
+        'body': 'Hi Boipara team,\n\nI need help with...',
+      },
+    );
+    if (!await launchUrl(uri)) _snack('Could not open email app.');
+  }
+
+  Future<void> _launchWhatsApp() async {
+    final uri = Uri.parse(
+      'https://wa.me/$_whatsapp?text=${Uri.encodeComponent('Hi Boipara! I need some help.')}',
+    );
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication))
+      _snack('Could not open WhatsApp.');
+  }
+
+  Future<void> _launchFacebook() async {
+    final uri = Uri.parse(_facebook);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication))
+      _snack('Could not open Facebook.');
+  }
+
+  void _snack(String msg) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+
+  void _openChat() => showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => const _ChatbotSheet(),
+  );
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: backgroundColor,
+      backgroundColor: _bg,
       appBar: AppBar(
-        backgroundColor: brown,
+        backgroundColor: _brown,
         foregroundColor: Colors.white,
-        elevation: 0,
         title: const Text(
           'Help & Support',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          style: TextStyle(fontWeight: FontWeight.w600),
         ),
+        elevation: 0,
       ),
-      body: SingleChildScrollView(
+      body: ListView(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Chatbot banner — coming soon
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [brown, const Color(0xFF7C4700)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+        children: [
+          _AiCard(onTap: _openChat),
+          const SizedBox(height: 24),
+          Text(
+            'Contact Us',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: _brown,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _ContactCard(
+                  icon: Icons.email_outlined,
+                  iconColor: Colors.blue.shade700,
+                  label: 'Email Us',
+                  sub: _email,
+                  onTap: _launchEmail,
                 ),
-                borderRadius: BorderRadius.circular(18),
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Text(
-                              'AI Assistant',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 18,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: accentOrange,
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: const Text(
-                                'Coming Soon',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ],
+              const SizedBox(width: 10),
+              Expanded(
+                child: _ContactCard(
+                  icon: Icons.chat,
+                  iconColor: Colors.green.shade600,
+                  label: 'WhatsApp',
+                  sub: '+880 1410 651007',
+                  onTap: _launchWhatsApp,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _ContactCard(
+                  icon: Icons.facebook,
+                  iconColor: const Color(0xFF1877F2),
+                  label: 'Facebook',
+                  sub: 'Boipara BD',
+                  onTap: _launchFacebook,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 28),
+          Text(
+            'Frequently Asked Questions',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: _brown,
+            ),
+          ),
+          const SizedBox(height: 12),
+          ..._faqs.map((f) => _FaqTile(item: f)),
+          const SizedBox(height: 30),
+        ],
+      ),
+    );
+  }
+}
+
+// ── AI Banner Card ────────────────────────────────────────────
+class _AiCard extends StatelessWidget {
+  final VoidCallback onTap;
+  const _AiCard({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF7C4700), Color(0xFF613613)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Text(
+                      'Assistant',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE07B39),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Text(
+                        'Beta',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1,
                         ),
-                        const SizedBox(height: 6),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Ask anything about Boipara — buying, selling, delivery, payments, clubs and more.',
+                  style: TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+                const SizedBox(height: 14),
+                GestureDetector(
+                  onTap: onTap,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: Colors.white.withOpacity(0.4)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.chat_bubble_outline,
+                          color: Colors.white,
+                          size: 16,
+                        ),
+                        SizedBox(width: 6),
                         Text(
-                          'Our smart chatbot will be available soon to answer your questions instantly.',
+                          'Chat with Assistant',
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.85),
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
                             fontSize: 13,
                           ),
                         ),
-                        const SizedBox(height: 14),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.3),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.chat_bubble_outline_rounded,
-                                color: Colors.white.withValues(alpha: 0.7),
-                                size: 16,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Chat with us — soon!',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.7),
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Icon(
-                    Icons.smart_toy_rounded,
-                    size: 64,
-                    color: Colors.white.withValues(alpha: 0.2),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Contact options
-            const Text(
-              'Contact Us',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: brown,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: _contactOptions.map((opt) {
-                final color = opt['color'] as Color;
-                return Expanded(
-                  child: GestureDetector(
-                    onTap: () {
-                      // TODO: launch URL / phone dialer
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Opening ${opt['title']}...'),
-                          backgroundColor: color,
-                        ),
-                      );
-                    },
-                    child: Container(
-                      margin: EdgeInsets.only(
-                        right: opt != _contactOptions.last ? 10 : 0,
-                      ),
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(14),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.05),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        children: [
-                          Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: color.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Icon(
-                              opt['icon'] as IconData,
-                              color: color,
-                              size: 22,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            opt['title'],
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            opt['subtitle'],
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Colors.grey.shade500,
-                            ),
-                            textAlign: TextAlign.center,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-
-            const SizedBox(height: 24),
-
-            // FAQ
-            const Text(
-              'Frequently Asked Questions',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: brown,
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            ...List.generate(_faqs.length, (index) {
-              final faq = _faqs[index];
-              final isExpanded = _expandedFaq == index;
-              return GestureDetector(
-                onTap: () =>
-                    setState(() => _expandedFaq = isExpanded ? null : index),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  margin: const EdgeInsets.only(bottom: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: isExpanded
-                          ? accentOrange.withValues(alpha: 0.4)
-                          : Colors.grey.shade200,
-                      width: isExpanded ? 1.5 : 1,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.04),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                faq['question'],
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
-                                  color: isExpanded ? brown : Colors.black87,
-                                ),
-                              ),
-                            ),
-                            Icon(
-                              isExpanded
-                                  ? Icons.keyboard_arrow_up_rounded
-                                  : Icons.keyboard_arrow_down_rounded,
-                              color: isExpanded
-                                  ? accentOrange
-                                  : Colors.grey.shade400,
-                            ),
-                          ],
-                        ),
-                        if (isExpanded) ...[
-                          const SizedBox(height: 10),
-                          const Divider(height: 1),
-                          const SizedBox(height: 10),
-                          Text(
-                            faq['answer'],
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.grey.shade600,
-                              height: 1.5,
-                            ),
-                          ),
-                        ],
                       ],
                     ),
                   ),
                 ),
-              );
-            }),
-
-            const SizedBox(height: 24),
-
-            // Report a problem
-            GestureDetector(
-              onTap: () => _showReportSheet(context),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.grey.shade200),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: Colors.red.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(
-                        Icons.flag_outlined,
-                        color: Colors.redAccent,
-                        size: 22,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Report a Problem',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          SizedBox(height: 2),
-                          Text(
-                            'Something not working? Let us know.',
-                            style: TextStyle(fontSize: 12, color: Colors.grey),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Icon(Icons.chevron_right, color: Colors.grey.shade400),
-                  ],
-                ),
-              ),
+              ],
             ),
+          ),
+          const SizedBox(width: 12),
+          Opacity(
+            opacity: 0.2,
+            child: Icon(
+              Icons.support_agent_rounded,
+              size: 80,
+              color: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
-            const SizedBox(height: 30),
+// ── Contact Card ──────────────────────────────────────────────
+class _ContactCard extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String label, sub;
+  final VoidCallback onTap;
+  const _ContactCard({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    required this.sub,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: iconColor.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: iconColor, size: 22),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              sub,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
           ],
         ),
       ),
     );
   }
+}
 
-  void _showReportSheet(BuildContext context) {
-    final controller = TextEditingController();
-    String selectedCategory = 'App Bug';
-    final categories = [
-      'App Bug',
-      'Payment Issue',
-      'Delivery Problem',
-      'Seller Issue',
-      'Other',
-    ];
+// ── FAQ ───────────────────────────────────────────────────────
+class _FaqItem {
+  final String q, a;
+  _FaqItem({required this.q, required this.a});
+}
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setSheetState) => Container(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-            top: 24,
-            left: 24,
-            right: 24,
+class _FaqTile extends StatefulWidget {
+  final _FaqItem item;
+  const _FaqTile({required this.item});
+  @override
+  State<_FaqTile> createState() => _FaqTileState();
+}
+
+class _FaqTileState extends State<_FaqTile> {
+  bool _open = false;
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
           ),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ],
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+          title: Text(
+            widget.item.q,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 20),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const Text(
-                'Report a Problem',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: brown,
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // Category
-              const Text(
-                'Category',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: categories.map((cat) {
-                  final selected = selectedCategory == cat;
-                  return GestureDetector(
-                    onTap: () => setSheetState(() => selectedCategory = cat),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? brown.withValues(alpha: 0.1)
-                            : Colors.grey.shade100,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: selected ? brown : Colors.grey.shade200,
-                          width: selected ? 1.5 : 1,
-                        ),
-                      ),
-                      child: Text(
-                        cat,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: selected ? brown : Colors.grey.shade600,
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 16),
-
-              // Description
-              const Text(
-                'Description',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: controller,
-                maxLines: 4,
-                decoration: InputDecoration(
-                  hintText: 'Describe the issue...',
-                  hintStyle: TextStyle(
-                    color: Colors.grey.shade400,
-                    fontSize: 13,
-                  ),
-                  filled: true,
-                  fillColor: Colors.grey.shade50,
-                  contentPadding: const EdgeInsets.all(14),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.grey.shade200),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.grey.shade200),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: brown, width: 1.5),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Report submitted. We\'ll get back to you soon!',
-                        ),
-                        backgroundColor: Color(0xFF059669),
-                      ),
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: brown,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  child: const Text(
-                    'Submit Report',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                  ),
-                ),
-              ),
-            ],
+          trailing: AnimatedRotation(
+            turns: _open ? 0.5 : 0,
+            duration: const Duration(milliseconds: 200),
+            child: const Icon(Icons.keyboard_arrow_down),
           ),
+          onExpansionChanged: (v) => setState(() => _open = v),
+          children: [
+            Text(
+              widget.item.a,
+              style: TextStyle(
+                color: Colors.grey.shade700,
+                fontSize: 13,
+                height: 1.5,
+              ),
+            ),
+          ],
         ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// CHATBOT SHEET — 100% Offline / Rule-based
+// ─────────────────────────────────────────────────────────────
+class _ChatbotSheet extends StatefulWidget {
+  const _ChatbotSheet();
+  @override
+  State<_ChatbotSheet> createState() => _ChatbotSheetState();
+}
+
+class _ChatbotSheetState extends State<_ChatbotSheet> {
+  final _ctrl = TextEditingController();
+  final _scroll = ScrollController();
+  bool _showTyping = false;
+
+  final List<_Msg> _messages = [
+    _Msg(
+      role: 'bot',
+      text:
+          'আস্সালামু আলাইকুম! 👋 I\'m Boipara\'s assistant.\n\nI can help you with selling, buying, delivery tracking, payments, book clubs, and more. What do you need help with?',
+    ),
+  ];
+
+  static const _chips = [
+    'How do I sell a book?',
+    'Track my order',
+    'Payment methods',
+    'How to join a club?',
+    'How to publish a book?',
+    'Return a book',
+    'Contact support',
+  ];
+
+  // ── Rule engine ───────────────────────────────────────────
+  static final List<_Rule> _rules = [
+    _Rule(
+      keys: ['sell', 'listing', 'list my book', 'how to sell', 'selling'],
+      reply:
+          '📚 To sell a book:\n\n1. Tap "Sell" on the homepage\n2. Fill in book name, author, edition, condition & price\n3. Choose your payment method (bKash/Nagad/Bank)\n4. Submit — our team reviews within 24 hours\n5. Once approved, buyers can find and order your book!\n\nTip: A detailed listing with good condition info sells faster.',
+    ),
+
+    _Rule(
+      keys: ['buy', 'purchase', 'order a book', 'how to buy', 'buying'],
+      reply:
+          '🛒 To buy a book:\n\n1. Tap "Buy" on the homepage or browse\n2. Find the book you want and tap it\n3. Tap "Buy Now" and fill in your delivery address\n4. Select your payment method\n5. Confirm — the seller will be notified!\n\nYou can track your delivery live from "Track Delivery".',
+    ),
+
+    _Rule(
+      keys: [
+        'track',
+        'delivery',
+        'where is my order',
+        'order status',
+        'shipping',
+        'tracking',
+      ],
+      reply:
+          '📦 To track your delivery:\n\n1. Go to Profile → "My Orders"\n   OR tap "Track" on the homepage\n2. You\'ll see a live 5-step timeline:\n   ✅ Ordered\n   📦 Packaging\n   🚚 Picked Up\n   🛵 Out for Delivery\n   ✅ Delivered\n\nDelivery typically takes 2–5 business days inside Bangladesh.',
+    ),
+
+    _Rule(
+      keys: [
+        'payment',
+        'bkash',
+        'nagad',
+        'bank',
+        'cash on delivery',
+        'cod',
+        'pay',
+      ],
+      reply:
+          '💳 Boipara supports these payment methods:\n\n• bKash\n• Nagad\n• Bank Transfer\n• Cash on Delivery (COD)\n\nAdd or manage payment methods from:\nProfile → Payment Methods\n\nYour payment info is fully encrypted and secure.',
+    ),
+
+    _Rule(
+      keys: [
+        'paid',
+        'earnings',
+        'revenue',
+        'seller payment',
+        'get my money',
+        'withdrawal',
+      ],
+      reply:
+          '💰 After your book is delivered:\n\n1. Order is marked "Delivered"\n2. Payment is transferred to your bKash/Nagad/bank\n3. Usually takes 1–2 business days\n\nSee all your earnings in:\nProfile → Transaction History → Earnings tab',
+    ),
+
+    _Rule(
+      keys: ['return', 'refund', 'wrong book', 'damaged', 'condition'],
+      reply:
+          '🔄 Return Policy:\n\nReturns are accepted within 3 days of delivery if:\n• The condition is significantly different from the listing\n• Wrong book was sent\n\nTo return:\n1. Take photos of the book\n2. Contact us on WhatsApp: +8801410651007\n3. Share your Order ID and photos\n4. We\'ll arrange the return and refund.',
+    ),
+
+    _Rule(
+      keys: ['club', 'book club', 'join club', 'create club', 'reading group'],
+      reply:
+          '📖 Book Clubs on Boipara:\n\n• Tap "Clubs" in the bottom nav bar\n• Browse all available clubs\n• Tap "Join" to become a member\n• Tap "+" to create your own club\n\nInside a club you can:\n✅ Discuss books\n✅ Chat with members\n✅ See upcoming events\n✅ Track what the club is reading',
+    ),
+
+    _Rule(
+      keys: ['publish', 'author', 'write', 'my book', 'new book', 'manuscript'],
+      reply:
+          '✍️ To publish your own book on Boipara:\n\n1. Tap "Publish" on the homepage\n2. Fill in your book details\n3. Submit for review\n4. Boipara handles printing & distribution\n5. You earn royalties on every sale!\n\nFor details, contact:\nofficialboipara@gmail.com',
+    ),
+
+    _Rule(
+      keys: [
+        'account',
+        'profile',
+        'edit profile',
+        'change name',
+        'update info',
+      ],
+      reply:
+          '👤 To manage your account:\n\n• Profile photo & bio → Profile → Edit Profile\n• Delivery addresses → Profile → Addresses\n• Payment methods → Profile → Payment Methods\n• Change password → use "Forgot Password" on login screen',
+    ),
+
+    _Rule(
+      keys: ['notification', 'alert', 'notify', 'bell'],
+      reply:
+          '🔔 You get notified for:\n\n• New order on your book\n• Question asked about your book\n• Answer to your question\n• Like on your post\n• Comment on your post\n\nTap the 🔔 bell icon in the top-right of the homepage to see all notifications.',
+    ),
+
+    _Rule(
+      keys: ['security', 'safe', 'secure', 'privacy', 'data'],
+      reply:
+          '🔒 Your data is safe with Boipara:\n\n• We never store full payment credentials\n• All data is encrypted in transit\n• Firebase Auth — industry-standard security\n• Contact us to delete your account anytime\n\nEmail: officialboipara@gmail.com',
+    ),
+
+    _Rule(
+      keys: [
+        'contact',
+        'support',
+        'help',
+        'reach',
+        'human',
+        'agent',
+        'talk to',
+      ],
+      reply:
+          '📞 Contact Boipara Support:\n\n📧 Email: officialboipara@gmail.com\n💬 WhatsApp: +8801410651007\n📘 Facebook: fb.com/boiparabd\n\nWhatsApp is fastest — we usually reply within a few hours!',
+    ),
+
+    _Rule(
+      keys: [
+        'hello',
+        'hi',
+        'hey',
+        'assalamu',
+        'salam',
+        'hola',
+        'good morning',
+        'good afternoon',
+        'good evening',
+      ],
+      reply:
+          '👋 Hello! Welcome to Boipara support!\n\nI\'m here to help you with:\n📚 Buying & selling books\n📦 Delivery tracking\n💳 Payments\n📖 Book clubs\n✍️ Publishing\n\nWhat do you need help with?',
+    ),
+
+    _Rule(
+      keys: ['thank', 'thanks', 'ধন্যবাদ', 'shukriya', 'dhonnobad'],
+      reply:
+          '😊 You\'re welcome! Happy reading! 📚\n\nIf you need anything else, just ask. You can also reach us on WhatsApp anytime: +8801410651007',
+    ),
+
+    _Rule(
+      keys: [
+        'guest',
+        'without account',
+        'login',
+        'sign up',
+        'register',
+        'create account',
+      ],
+      reply:
+          '🔑 Account & Login:\n\n• Browse as a guest without logging in\n• To buy, sell, or join clubs — you need an account\n• Sign up with Email, Google, or Phone number\n• Forgot password? Use "Forgot Password" on login\n\nCreating an account is free and takes under a minute!',
+    ),
+
+    _Rule(
+      keys: [
+        'university',
+        'student',
+        'du',
+        'buet',
+        'nsu',
+        'brac',
+        'student price',
+      ],
+      reply:
+          '🎓 Boipara is built for university students!\n\nAvailable to students across Bangladesh:\nDU, BUET, NSU, BRAC, IUT, RUET, CUET and more\n\nSell your old textbooks and buy preloved books at student-friendly prices! 📚',
+    ),
+  ];
+
+  static const _fallback =
+      'Sorry, I didn\'t quite understand that. 🤔\n\nYou can ask me about:\n• Selling or buying books\n• Delivery tracking\n• Payment methods\n• Book clubs\n• Publishing a book\n• Returns & refunds\n• Account settings\n\nOr reach us on WhatsApp: +8801410651007';
+
+  String _getReply(String input) {
+    final lower = input.toLowerCase().trim();
+    for (final rule in _rules) {
+      for (final key in rule.keys) {
+        if (lower.contains(key)) return rule.reply;
+      }
+    }
+    return _fallback;
+  }
+
+  void _sendWithTyping([String? preText]) {
+    final text = (preText ?? _ctrl.text).trim();
+    if (text.isEmpty || _showTyping) return;
+    setState(() {
+      _messages.add(_Msg(role: 'user', text: text));
+      _showTyping = true;
+    });
+    _ctrl.clear();
+    _scrollDown();
+    Future.delayed(const Duration(milliseconds: 700), () {
+      if (!mounted) return;
+      setState(() {
+        _showTyping = false;
+        _messages.add(_Msg(role: 'bot', text: _getReply(text)));
+      });
+      _scrollDown();
+    });
+  }
+
+  void _scrollDown() {
+    Future.delayed(const Duration(milliseconds: 120), () {
+      if (_scroll.hasClients) {
+        _scroll.animateTo(
+          _scroll.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.88,
+      decoration: const BoxDecoration(
+        color: Color(0xFFF5F0E9),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        children: [
+          // Handle bar
+          Center(
+            child: Container(
+              margin: const EdgeInsets.only(top: 10),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          // Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: const BoxDecoration(
+              color: Color(0xFF613613),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.support_agent_rounded,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Boipara Assistant',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        Container(
+                          width: 7,
+                          height: 7,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF4CAF50),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Text(
+                          'Always online',
+                          style: TextStyle(color: Colors.white70, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close, color: Colors.white),
+                ),
+              ],
+            ),
+          ),
+          // Messages
+          Expanded(
+            child: ListView.builder(
+              controller: _scroll,
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
+              itemCount: _messages.length + (_showTyping ? 1 : 0),
+              itemBuilder: (_, i) {
+                if (i == _messages.length) return const _TypingIndicator();
+                return _ChatBubble(msg: _messages[i]);
+              },
+            ),
+          ),
+          // Suggestion chips
+          if (_messages.length <= 1)
+            SizedBox(
+              height: 44,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
+                children: _chips
+                    .map(
+                      (chip) => GestureDetector(
+                        onTap: () => _sendWithTyping(chip),
+                        child: Container(
+                          margin: const EdgeInsets.only(right: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: const Color(0xFFE07B39).withOpacity(0.5),
+                            ),
+                          ),
+                          child: Text(
+                            chip,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF7C4700),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
+          // Input bar
+          Container(
+            padding: EdgeInsets.fromLTRB(12, 8, 12, 12 + bottomInset),
+            color: Colors.white,
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _ctrl,
+                    onSubmitted: (_) => _sendWithTyping(),
+                    textInputAction: TextInputAction.send,
+                    maxLines: 3,
+                    minLines: 1,
+                    decoration: InputDecoration(
+                      hintText: 'Type your question...',
+                      hintStyle: TextStyle(
+                        color: Colors.grey.shade400,
+                        fontSize: 14,
+                      ),
+                      filled: true,
+                      fillColor: const Color(0xFFF5F0E9),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: _sendWithTyping,
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF613613),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.send_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// MODELS & WIDGETS
+// ─────────────────────────────────────────────────────────────
+class _Rule {
+  final List<String> keys;
+  final String reply;
+  const _Rule({required this.keys, required this.reply});
+}
+
+class _Msg {
+  final String role, text;
+  _Msg({required this.role, required this.text});
+}
+
+class _ChatBubble extends StatelessWidget {
+  final _Msg msg;
+  const _ChatBubble({required this.msg});
+  @override
+  Widget build(BuildContext context) {
+    final isUser = msg.role == 'user';
+    return Align(
+      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+      child: Row(
+        mainAxisAlignment: isUser
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (!isUser) ...[
+            Container(
+              width: 30,
+              height: 30,
+              decoration: const BoxDecoration(
+                color: Color(0xFF613613),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.support_agent_rounded,
+                color: Colors.white,
+                size: 17,
+              ),
+            ),
+            const SizedBox(width: 6),
+          ],
+          Flexible(
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: isUser ? const Color(0xFF613613) : Colors.white,
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(16),
+                  topRight: const Radius.circular(16),
+                  bottomLeft: Radius.circular(isUser ? 16 : 4),
+                  bottomRight: Radius.circular(isUser ? 4 : 16),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.06),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Text(
+                msg.text,
+                style: TextStyle(
+                  color: isUser ? Colors.white : Colors.grey.shade800,
+                  fontSize: 13.5,
+                  height: 1.45,
+                ),
+              ),
+            ),
+          ),
+          if (isUser) const SizedBox(width: 6),
+        ],
+      ),
+    );
+  }
+}
+
+class _TypingIndicator extends StatefulWidget {
+  const _TypingIndicator();
+  @override
+  State<_TypingIndicator> createState() => _TypingIndicatorState();
+}
+
+class _TypingIndicatorState extends State<_TypingIndicator>
+    with TickerProviderStateMixin {
+  late final List<AnimationController> _ctrls;
+  @override
+  void initState() {
+    super.initState();
+    _ctrls = List.generate(3, (i) {
+      final c = AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 350),
+      );
+      Future.delayed(Duration(milliseconds: i * 160), () {
+        if (mounted) c.repeat(reverse: true);
+      });
+      return c;
+    });
+  }
+
+  @override
+  void dispose() {
+    for (final c in _ctrls) c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Container(
+            width: 30,
+            height: 30,
+            decoration: const BoxDecoration(
+              color: Color(0xFF613613),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.support_agent_rounded,
+              color: Colors.white,
+              size: 17,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
+                bottomRight: Radius.circular(16),
+                bottomLeft: Radius.circular(4),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.06),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: List.generate(
+                3,
+                (i) => AnimatedBuilder(
+                  animation: _ctrls[i],
+                  builder: (_, __) => Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 2),
+                    width: 7,
+                    height: 7 + _ctrls[i].value * 6,
+                    decoration: BoxDecoration(
+                      color: Color.lerp(
+                        Colors.grey.shade300,
+                        const Color(0xFFE07B39),
+                        _ctrls[i].value,
+                      ),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -29,9 +29,9 @@ class _MyBookClubsScreenState extends State<MyBookClubsScreen> {
     return Icons.menu_book_rounded;
   }
 
-  // ── Leave club ────────────────────────────────────────────────────────
-  void _leaveClub(String clubId, String clubName) {
-    showDialog(
+  // ── Leave club ────────────────────────────────────────────────────────────
+  Future<void> _leaveClub(String clubId, String clubName) async {
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -42,37 +42,50 @@ class _MyBookClubsScreenState extends State<MyBookClubsScreen> {
         content: Text('Are you sure you want to leave "$clubName"?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await FirebaseFirestore.instance
-                  .collection('clubs')
-                  .doc(clubId)
-                  .collection('members')
-                  .doc(_uid)
-                  .delete();
-              await FirebaseFirestore.instance
-                  .collection('clubs')
-                  .doc(clubId)
-                  .update({'memberCount': FieldValue.increment(-1)});
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('You have left the club'),
-                    backgroundColor: Colors.redAccent,
-                  ),
-                );
-              }
-            },
+            onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             child: const Text('Leave', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
+
+    if (confirmed != true) return;
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('clubs')
+          .doc(clubId)
+          .collection('members')
+          .doc(_uid)
+          .delete();
+      await FirebaseFirestore.instance.collection('clubs').doc(clubId).update({
+        'memberCount': FieldValue.increment(-1),
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('You have left the club'),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   String _formatCount(int count) {
@@ -80,84 +93,81 @@ class _MyBookClubsScreenState extends State<MyBookClubsScreen> {
     return '$count';
   }
 
+  // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    if (_uid.isEmpty) {
+      return Scaffold(
+        backgroundColor: backgroundColor,
+        appBar: _buildAppBar(),
+        body: const Center(child: Text('Please log in to view your clubs')),
+      );
+    }
+
     return Scaffold(
       backgroundColor: backgroundColor,
-      appBar: AppBar(
-        backgroundColor: brown,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        title: const Text(
-          'My Book Clubs',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-        ),
-        actions: [
-          TextButton.icon(
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ClubsListScreen()),
-            ),
-            icon: const Icon(Icons.add, color: Colors.white, size: 18),
-            label: const Text(
-              'Join More',
-              style: TextStyle(color: Colors.white, fontSize: 13),
-            ),
-          ),
-        ],
-      ),
-      // ── Stream: all clubs where this user is a member ─────────────────
+      appBar: _buildAppBar(),
+      // Strategy: stream ALL clubs, then for each club check if
+      // clubs/{clubId}/members/{uid} exists. This avoids the
+      // collectionGroup index requirement entirely.
       body: StreamBuilder<QuerySnapshot>(
-        // We query all clubs, then filter by membership in the card.
-        // Better approach: collectionGroup query on 'members' where uid == _uid
         stream: FirebaseFirestore.instance
-            .collectionGroup('members')
-            .where('uid', isEqualTo: _uid)
+            .collection('clubs')
+            .orderBy('createdAt', descending: true)
             .snapshots(),
-        builder: (context, memberSnap) {
-          if (memberSnap.connectionState == ConnectionState.waiting) {
+        builder: (context, allClubsSnap) {
+          if (allClubsSnap.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator(color: brown));
           }
-          final memberDocs = memberSnap.data?.docs ?? [];
-          if (memberDocs.isEmpty) return _emptyState();
 
-          // Get club IDs from the member docs
-          final clubIds = memberDocs
-              .map((d) => d.reference.parent.parent!.id)
-              .toList();
+          if (allClubsSnap.hasError) {
+            return Center(child: Text('Error: ${allClubsSnap.error}'));
+          }
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: clubIds.length,
-            itemBuilder: (context, index) {
-              final clubId = clubIds[index];
-              final memberData =
-                  memberDocs[index].data() as Map<String, dynamic>;
-              final role = memberData['role'] ?? 'member';
-              return StreamBuilder<DocumentSnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('clubs')
-                    .doc(clubId)
-                    .snapshots(),
-                builder: (context, clubSnap) {
-                  if (!clubSnap.hasData) return const SizedBox.shrink();
-                  final club = clubSnap.data?.data() as Map<String, dynamic>?;
-                  if (club == null) return const SizedBox.shrink();
-                  final color = _toColor(club['color']);
-                  final icon = _toIcon(club['icon']);
-                  return _buildClubCard(
-                    clubId: clubId,
-                    club: club,
-                    color: color,
-                    icon: icon,
-                    role: role,
-                  );
-                },
-              );
-            },
+          final allDocs = allClubsSnap.data?.docs ?? [];
+
+          if (allDocs.isEmpty) {
+            return _emptyState();
+          }
+
+          // For each club, stream the member doc for this user.
+          // Only render the card if the member doc exists.
+          return _MemberClubList(
+            uid: _uid,
+            allClubDocs: allDocs,
+            toColor: _toColor,
+            toIcon: _toIcon,
+            formatCount: _formatCount,
+            onLeave: _leaveClub,
+            backgroundColor: backgroundColor,
           );
         },
       ),
+    );
+  }
+
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      backgroundColor: brown,
+      foregroundColor: Colors.white,
+      elevation: 0,
+      title: const Text(
+        'My Book Clubs',
+        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+      ),
+      actions: [
+        TextButton.icon(
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ClubsListScreen()),
+          ),
+          icon: const Icon(Icons.add, color: Colors.white, size: 18),
+          label: const Text(
+            'Join More',
+            style: TextStyle(color: Colors.white, fontSize: 13),
+          ),
+        ),
+      ],
     );
   }
 
@@ -203,28 +213,134 @@ class _MyBookClubsScreenState extends State<MyBookClubsScreen> {
       ],
     ),
   );
+}
 
-  Widget _buildClubCard({
-    required String clubId,
-    required Map<String, dynamic> club,
-    required Color color,
-    required IconData icon,
-    required String role,
-  }) {
-    final isModerator = role == 'Moderator';
+// ── Renders only clubs the user has joined ────────────────────────────────────
+// Uses one StreamBuilder per club to check membership, then shows only joined ones.
+class _MemberClubList extends StatelessWidget {
+  final String uid;
+  final List<QueryDocumentSnapshot> allClubDocs;
+  final Color Function(dynamic) toColor;
+  final IconData Function(dynamic) toIcon;
+  final String Function(int) formatCount;
+  final Future<void> Function(String, String) onLeave;
+  final Color backgroundColor;
+
+  static const brown = Color(0xFF613613);
+  static const accentOrange = Color(0xFFE07B39);
+
+  const _MemberClubList({
+    required this.uid,
+    required this.allClubDocs,
+    required this.toColor,
+    required this.toIcon,
+    required this.formatCount,
+    required this.onLeave,
+    required this.backgroundColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: allClubDocs.length,
+      itemBuilder: (context, i) {
+        final doc = allClubDocs[i];
+        final clubId = doc.id;
+        final data = doc.data() as Map<String, dynamic>;
+
+        // Stream the member doc — renders only if exists
+        return StreamBuilder<DocumentSnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('clubs')
+              .doc(clubId)
+              .collection('members')
+              .doc(uid)
+              .snapshots(),
+          builder: (context, memberSnap) {
+            // Not joined → render nothing
+            if (!memberSnap.hasData) return const SizedBox.shrink();
+            if (!(memberSnap.data?.exists ?? false)) {
+              return const SizedBox.shrink();
+            }
+
+            final memberData =
+                memberSnap.data!.data() as Map<String, dynamic>? ?? {};
+            final role = memberData['role'] as String? ?? 'member';
+            final color = toColor(data['color']);
+            final icon = toIcon(data['icon']);
+
+            return _MyClubCard(
+              clubId: clubId,
+              club: data,
+              color: color,
+              icon: icon,
+              role: role,
+              uid: uid,
+              formatCount: formatCount,
+              onLeave: onLeave,
+              backgroundColor: backgroundColor,
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+// ── Single club card ──────────────────────────────────────────────────────────
+class _MyClubCard extends StatelessWidget {
+  final String clubId;
+  final Map<String, dynamic> club;
+  final Color color;
+  final IconData icon;
+  final String role;
+  final String uid;
+  final String Function(int) formatCount;
+  final Future<void> Function(String, String) onLeave;
+  final Color backgroundColor;
+
+  static const brown = Color(0xFF613613);
+  static const accentOrange = Color(0xFFE07B39);
+
+  const _MyClubCard({
+    required this.clubId,
+    required this.club,
+    required this.color,
+    required this.icon,
+    required this.role,
+    required this.uid,
+    required this.formatCount,
+    required this.onLeave,
+    required this.backgroundColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     final isAdmin = role == 'admin';
-    final memberCount = club['memberCount'] ?? 0;
-    final currentBook = club['currentlyReading'] ?? '';
-    final nextEvent = club['nextEvent'] ?? '';
-    // For unread posts we stream the posts count — simplified to show badge
+    final isModerator = role == 'Moderator';
+    final memberCount = (club['memberCount'] as num?)?.toInt() ?? 0;
+    final clubName = club['clubName'] as String? ?? '';
+    final university = club['university'] as String? ?? '';
+
+    // Currently reading: try list first, then string field
+    String currentBook = '—';
+    final cr = club['currentlyReading'];
+    if (cr is List && cr.isNotEmpty) {
+      currentBook = cr.first.toString();
+    } else if (cr is String && cr.isNotEmpty) {
+      currentBook = cr;
+    }
+
+    // Next event from events subcollection — shown via stream below
     return GestureDetector(
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => BookClubPage(
             clubId: clubId,
-            clubName: club['clubName'] ?? '',
-            university: club['university'] ?? '',
+            clubName: clubName,
+            university: university,
             color: color,
             icon: icon,
           ),
@@ -245,7 +361,7 @@ class _MyBookClubsScreenState extends State<MyBookClubsScreen> {
         ),
         child: Column(
           children: [
-            // Colored top bar — unchanged
+            // Colored top bar
             Container(
               height: 6,
               decoration: BoxDecoration(
@@ -261,7 +377,7 @@ class _MyBookClubsScreenState extends State<MyBookClubsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Header row — unchanged layout
+                  // ── Header row ─────────────────────────────────────────
                   Row(
                     children: [
                       Container(
@@ -279,7 +395,7 @@ class _MyBookClubsScreenState extends State<MyBookClubsScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              club['clubName'] ?? '',
+                              clubName,
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 15,
@@ -288,7 +404,7 @@ class _MyBookClubsScreenState extends State<MyBookClubsScreen> {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              club['university'] ?? '',
+                              university,
                               style: TextStyle(
                                 fontSize: 12,
                                 color: Colors.grey.shade500,
@@ -297,7 +413,7 @@ class _MyBookClubsScreenState extends State<MyBookClubsScreen> {
                           ],
                         ),
                       ),
-                      // Role badge — unchanged
+                      // Role badge
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 10,
@@ -328,19 +444,27 @@ class _MyBookClubsScreenState extends State<MyBookClubsScreen> {
                   ),
                   const SizedBox(height: 14),
 
-                  // Stats — unchanged layout
+                  // ── Member count ───────────────────────────────────────
                   Row(
                     children: [
-                      _statChip(
+                      Icon(
                         Icons.people_outline_rounded,
-                        '${_formatCount(memberCount)} members',
-                        Colors.grey,
+                        size: 13,
+                        color: Colors.grey.shade400,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${formatCount(memberCount)} members',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade500,
+                        ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 10),
 
-                  // Current book & next meeting — unchanged layout
+                  // ── Currently reading + next event ─────────────────────
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -362,12 +486,14 @@ class _MyBookClubsScreenState extends State<MyBookClubsScreen> {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                currentBook.isEmpty ? '—' : currentBook,
+                                currentBook,
                                 style: const TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
                                   color: Colors.black87,
                                 ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ],
                           ),
@@ -378,27 +504,49 @@ class _MyBookClubsScreenState extends State<MyBookClubsScreen> {
                           color: Colors.grey.shade300,
                         ),
                         const SizedBox(width: 12),
+                        // Next event from subcollection
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Next Event',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.grey.shade500,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                nextEvent.isEmpty ? '—' : nextEvent,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.black87,
-                                ),
-                              ),
-                            ],
+                          child: StreamBuilder<QuerySnapshot>(
+                            stream: FirebaseFirestore.instance
+                                .collection('clubs')
+                                .doc(clubId)
+                                .collection('events')
+                                .orderBy('date', descending: false)
+                                .limit(1)
+                                .snapshots(),
+                            builder: (context, evSnap) {
+                              String nextEvent = '—';
+                              if (evSnap.hasData &&
+                                  evSnap.data!.docs.isNotEmpty) {
+                                final ev =
+                                    evSnap.data!.docs.first.data()
+                                        as Map<String, dynamic>;
+                                nextEvent = ev['title'] as String? ?? '—';
+                              }
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Next Event',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.grey.shade500,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    nextEvent,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black87,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              );
+                            },
                           ),
                         ),
                       ],
@@ -407,10 +555,10 @@ class _MyBookClubsScreenState extends State<MyBookClubsScreen> {
 
                   const SizedBox(height: 12),
 
-                  // Bottom action row — unchanged layout
+                  // ── Bottom row: post count + leave ─────────────────────
                   Row(
                     children: [
-                      // Live unread posts badge
+                      // Live post count badge
                       StreamBuilder<QuerySnapshot>(
                         stream: FirebaseFirestore.instance
                             .collection('clubs')
@@ -421,14 +569,15 @@ class _MyBookClubsScreenState extends State<MyBookClubsScreen> {
                             .snapshots(),
                         builder: (context, postsSnap) {
                           final count = postsSnap.data?.docs.length ?? 0;
-                          if (count == 0)
+                          if (count == 0) {
                             return Text(
-                              'No new posts',
+                              'No posts yet',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: Colors.grey.shade400,
                               ),
                             );
+                          }
                           return Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 10,
@@ -461,9 +610,9 @@ class _MyBookClubsScreenState extends State<MyBookClubsScreen> {
                         },
                       ),
                       const Spacer(),
-                      // Leave button — unchanged style
+                      // Leave button
                       GestureDetector(
-                        onTap: () => _leaveClub(clubId, club['clubName'] ?? ''),
+                        onTap: () => onLeave(clubId, clubName),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 12,
@@ -493,13 +642,4 @@ class _MyBookClubsScreenState extends State<MyBookClubsScreen> {
       ),
     );
   }
-
-  Widget _statChip(IconData icon, String label, Color color) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Icon(icon, size: 13, color: Colors.grey.shade400),
-      const SizedBox(width: 4),
-      Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
-    ],
-  );
 }

@@ -12,7 +12,8 @@ import 'my_book_clubs_screen.dart';
 import 'notifications_screen.dart';
 import 'help_support_screen.dart';
 import 'admin_screen.dart';
-import 'settings_screen.dart'; // ← NEW
+import 'settings_screen.dart';
+import 'track_delivery_screen.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -26,10 +27,16 @@ class _ProfilePageState extends State<ProfilePage> {
   static const darkBrown = Color(0xFF613613);
   static const accentOrange = Color(0xFFE07B39);
 
+  // ── ADMIN UIDs — add more UIDs here when needed ──────────────
+  static const _adminUids = [
+    'ej8fi1fN0JQsjgaOFVpWCa8KUTI2', // Towsif
+    // 'PARTNER_UID_HERE',            // Partner (add later)
+  ];
+
   Map<String, dynamic>? _userData;
   bool _isLoading = true;
+  bool _isAdmin = false; // ← NEW
 
-  // Firestore-backed stats
   int _booksSold = 0;
   int _booksBought = 0;
 
@@ -44,6 +51,9 @@ class _ProfilePageState extends State<ProfilePage> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
+
+      // ── Check if current user is admin ───────────────────────
+      final isAdmin = _adminUids.contains(user.uid);
 
       final doc = await FirebaseFirestore.instance
           .collection('users')
@@ -63,7 +73,6 @@ class _ProfilePageState extends State<ProfilePage> {
         });
       }
 
-      // Load live stats: books sold (seller) & bought (buyer)
       final db = FirebaseFirestore.instance;
       final uid = user.uid;
 
@@ -83,6 +92,7 @@ class _ProfilePageState extends State<ProfilePage> {
         setState(() {
           _booksSold = soldQuery.docs.length;
           _booksBought = boughtQuery.docs.length;
+          _isAdmin = isAdmin; // ← set admin flag
         });
       }
     } catch (_) {
@@ -149,7 +159,6 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
         centerTitle: true,
         actions: [
-          // ── Settings gear → SettingsScreen ──────────────────
           IconButton(
             icon: const Icon(Icons.settings_outlined, color: Colors.white),
             tooltip: 'Settings',
@@ -254,9 +263,42 @@ class _ProfilePageState extends State<ProfilePage> {
                             color: Colors.white70,
                           ),
                         ),
-                        const SizedBox(height: 16),
 
-                        // Live stats
+                        // ── Admin badge ──────────────────────
+                        if (_isAdmin) ...[
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: darkBrown,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.verified,
+                                  color: Colors.white,
+                                  size: 14,
+                                ),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Admin',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+
+                        const SizedBox(height: 16),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -290,7 +332,6 @@ class _ProfilePageState extends State<ProfilePage> {
 
                   const SizedBox(height: 24),
 
-                  // ── Menu Items ───────────────────────────────
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Column(
@@ -317,7 +358,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           onTap: () => Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => const OrdersScreen(),
+                              builder: (_) => const TrackDeliveryScreen(),
                             ),
                           ),
                         ),
@@ -392,7 +433,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
                         const SizedBox(height: 24),
 
-                        // Quick Settings
+                        // Settings
                         _buildSectionTitle('Settings'),
                         const SizedBox(height: 12),
                         _buildMenuItem(
@@ -431,7 +472,6 @@ class _ProfilePageState extends State<ProfilePage> {
                             ),
                           ),
                         ),
-                        // Full settings page
                         _buildMenuItem(
                           icon: Icons.settings_outlined,
                           title: 'All Settings',
@@ -457,21 +497,24 @@ class _ProfilePageState extends State<ProfilePage> {
 
                         const SizedBox(height: 24),
 
-                        // Admin panel — only show for admins (ideally check a claim/role)
-                        _buildMenuItem(
-                          icon: Icons.admin_panel_settings_outlined,
-                          title: 'Admin Panel',
-                          subtitle: 'Review and approve book listings',
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const AdminScreen(),
+                        // ── Admin Panel — ONLY visible to admins ──
+                        if (_isAdmin) ...[
+                          _buildSectionTitle('Administration'),
+                          const SizedBox(height: 12),
+                          _buildMenuItem(
+                            icon: Icons.admin_panel_settings_outlined,
+                            title: 'Admin Panel',
+                            subtitle: 'Manage orders, books & users',
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const AdminScreen(),
+                              ),
                             ),
+                            isAdmin: true,
                           ),
-                          isAdmin: true,
-                        ),
-
-                        const SizedBox(height: 24),
+                          const SizedBox(height: 24),
+                        ],
 
                         // Logout
                         SizedBox(
@@ -498,7 +541,6 @@ class _ProfilePageState extends State<ProfilePage> {
                             ),
                           ),
                         ),
-
                         const SizedBox(height: 32),
                       ],
                     ),

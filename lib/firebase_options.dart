@@ -64,7 +64,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '765521707078',
     projectId: 'boipara-eb181',
     storageBucket: 'boipara-eb181.firebasestorage.app',
-    iosBundleId: 'com.example.bibliobd',
+    iosBundleId: 'com.example.boipara',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
@@ -73,7 +73,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '765521707078',
     projectId: 'boipara-eb181',
     storageBucket: 'boipara-eb181.firebasestorage.app',
-    iosBundleId: 'com.example.bibliobd',
+    iosBundleId: 'com.example.boipara',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(

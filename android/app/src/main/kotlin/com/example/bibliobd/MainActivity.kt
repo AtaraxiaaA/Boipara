@@ -1,4 +1,4 @@
-package com.example.bibliobd
+package com.example.boipara
 
 import io.flutter.embedding.android.FlutterActivity
 

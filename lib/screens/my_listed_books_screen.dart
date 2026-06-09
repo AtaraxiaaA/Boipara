@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class MyListedBooksScreen extends StatefulWidget {
   const MyListedBooksScreen({super.key});
@@ -16,87 +18,27 @@ class _MyListedBooksScreenState extends State<MyListedBooksScreen>
   static const accentOrange = Color(0xFFE07B39);
   static const backgroundColor = Color(0xFFF5F0E9);
 
-  // Placeholder listings — replace with API later
-  final List<Map<String, dynamic>> _listings = [
-    {
-      'id': 1,
-      'title': 'Atomic Habits',
-      'author': 'James Clear',
-      'askingPrice': 420,
-      'buyingPrice': 600,
-      'condition': 'Good',
-      'edition': '2nd Edition',
-      'status': 'Active',
-      'postedDate': 'Mar 7, 2026',
-      'views': 24,
-      'interested': 3,
-    },
-    {
-      'id': 2,
-      'title': 'Sapiens',
-      'author': 'Yuval Noah Harari',
-      'askingPrice': 500,
-      'buyingPrice': 900,
-      'condition': 'Like New',
-      'edition': '1st Edition',
-      'status': 'Active',
-      'postedDate': 'Mar 5, 2026',
-      'views': 41,
-      'interested': 7,
-    },
-    {
-      'id': 3,
-      'title': 'Pather Panchali',
-      'author': 'Bibhutibhushan',
-      'askingPrice': 200,
-      'buyingPrice': 400,
-      'condition': 'Acceptable',
-      'edition': 'Classic Edition',
-      'status': 'Sold',
-      'postedDate': 'Feb 20, 2026',
-      'views': 58,
-      'interested': 12,
-    },
-    {
-      'id': 4,
-      'title': 'Himu',
-      'author': 'Humayun Ahmed',
-      'askingPrice': 150,
-      'buyingPrice': 300,
-      'condition': 'Acceptable',
-      'edition': '',
-      'status': 'Pending Verification',
-      'postedDate': 'Mar 10, 2026',
-      'views': 5,
-      'interested': 0,
-    },
-    {
-      'id': 5,
-      'title': '1984',
-      'author': 'George Orwell',
-      'askingPrice': 280,
-      'buyingPrice': 500,
-      'condition': 'Good',
-      'edition': 'Revised Edition',
-      'status': 'Sold',
-      'postedDate': 'Feb 10, 2026',
-      'views': 73,
-      'interested': 15,
-    },
-  ];
+  String get _uid => FirebaseAuth.instance.currentUser?.uid ?? '';
 
-  List<Map<String, dynamic>> get _active => _listings
-      .where(
-        (b) => b['status'] == 'Active' || b['status'] == 'Pending Verification',
-      )
-      .toList();
-  List<Map<String, dynamic>> get _sold =>
-      _listings.where((b) => b['status'] == 'Sold').toList();
+  // ── Firestore status → display label ─────────────────────────────────────
+  static const _statusLabel = {
+    'pending_review': 'Pending Review',
+    'approved': 'Active',
+    'rejected': 'Rejected',
+    'sold': 'Sold',
+  };
+
+  static const _statusColor = {
+    'pending_review': Color(0xFFB45309),
+    'approved': Color(0xFF059669),
+    'rejected': Color(0xFFDC2626),
+    'sold': Color(0xFF7C3AED),
+  };
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -104,6 +46,8 @@ class _MyListedBooksScreenState extends State<MyListedBooksScreen>
     _tabController.dispose();
     super.dispose();
   }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
 
   Color _conditionColor(String condition) {
     switch (condition) {
@@ -118,21 +62,20 @@ class _MyListedBooksScreenState extends State<MyListedBooksScreen>
     }
   }
 
-  Color _statusColor(String status) {
-    switch (status) {
-      case 'Active':
-        return const Color(0xFF059669);
-      case 'Sold':
-        return const Color(0xFF7C3AED);
-      case 'Pending Verification':
-        return const Color(0xFFB45309);
-      default:
-        return Colors.grey;
-    }
+  String _timeAgo(dynamic ts) {
+    if (ts == null) return '';
+    final dt = (ts as Timestamp).toDate();
+    final diff = DateTime.now().difference(dt);
+    if (diff.inDays >= 1) return '${dt.day}/${dt.month}/${dt.year}';
+    if (diff.inHours >= 1) return '${diff.inHours}h ago';
+    if (diff.inMinutes >= 1) return '${diff.inMinutes}m ago';
+    return 'Just now';
   }
 
-  void _confirmDelete(Map<String, dynamic> book) {
-    showDialog(
+  // ── Delete with Firestore ─────────────────────────────────────────────────
+
+  Future<void> _confirmDelete(String docId, String title) async {
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -140,76 +83,158 @@ class _MyListedBooksScreenState extends State<MyListedBooksScreen>
           'Remove Listing',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        content: Text('Remove "${book['title']}" from your listings?'),
+        content: Text('Remove "$title" from your listings?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              setState(
-                () => _listings.removeWhere((b) => b['id'] == book['id']),
-              );
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Listing removed'),
-                  backgroundColor: Colors.redAccent,
-                ),
-              );
-            },
+            onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             child: const Text('Remove', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
+
+    if (confirmed != true) return;
+
+    try {
+      await FirebaseFirestore.instance.collection('books').doc(docId).delete();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Listing removed'),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to remove: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: backgroundColor,
-      appBar: AppBar(
-        backgroundColor: brown,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        title: const Text(
-          'My Listed Books',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-        ),
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: accentOrange,
-          indicatorWeight: 3,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white60,
-          labelStyle: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 14,
+    if (_uid.isEmpty) {
+      return Scaffold(
+        backgroundColor: backgroundColor,
+        appBar: AppBar(
+          backgroundColor: brown,
+          foregroundColor: Colors.white,
+          title: const Text(
+            'My Listed Books',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
           ),
-          tabs: [
-            Tab(text: 'Active (${_active.length})'),
-            Tab(text: 'Sold (${_sold.length})'),
-          ],
         ),
+        body: const Center(child: Text('Please log in to view your listings')),
+      );
+    }
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('books')
+          .where('sellerId', isEqualTo: _uid)
+          .snapshots(),
+      builder: (context, snap) {
+        if (snap.hasError) {
+          return Scaffold(
+            backgroundColor: backgroundColor,
+            appBar: _buildAppBar(0, 0, 0),
+            body: Center(child: Text('Error: ${snap.error}')),
+          );
+        }
+
+        List<QueryDocumentSnapshot> allDocs = snap.data?.docs ?? [];
+
+        // Sort newest first in client (avoids composite index requirement)
+        allDocs.sort((a, b) {
+          final aTime = (a.data() as Map)['createdAt'] as Timestamp?;
+          final bTime = (b.data() as Map)['createdAt'] as Timestamp?;
+          if (aTime == null && bTime == null) return 0;
+          if (aTime == null) return 1;
+          if (bTime == null) return -1;
+          return bTime.compareTo(aTime);
+        });
+
+        final active = allDocs
+            .where(
+              (d) =>
+                  (d.data() as Map)['status'] == 'approved' ||
+                  (d.data() as Map)['status'] == 'pending_review',
+            )
+            .toList();
+
+        final sold = allDocs
+            .where((d) => (d.data() as Map)['status'] == 'sold')
+            .toList();
+
+        final rejected = allDocs
+            .where((d) => (d.data() as Map)['status'] == 'rejected')
+            .toList();
+
+        return Scaffold(
+          backgroundColor: backgroundColor,
+          appBar: _buildAppBar(active.length, sold.length, rejected.length),
+          body: snap.connectionState == ConnectionState.waiting
+              ? const Center(child: CircularProgressIndicator(color: brown))
+              : TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildList(active, showDelete: true),
+                    _buildList(sold, showDelete: false),
+                    _buildList(rejected, showDelete: true),
+                  ],
+                ),
+        );
+      },
+    );
+  }
+
+  PreferredSizeWidget _buildAppBar(int active, int sold, int rejected) {
+    return AppBar(
+      backgroundColor: brown,
+      foregroundColor: Colors.white,
+      elevation: 0,
+      title: const Text(
+        'My Listed Books',
+        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
       ),
-      body: TabBarView(
+      bottom: TabBar(
         controller: _tabController,
-        children: [
-          _buildList(_active, showActions: true),
-          _buildList(_sold, showActions: false),
+        indicatorColor: accentOrange,
+        indicatorWeight: 3,
+        labelColor: Colors.white,
+        unselectedLabelColor: Colors.white60,
+        labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+        tabs: [
+          Tab(text: 'Active ($active)'),
+          Tab(text: 'Sold ($sold)'),
+          Tab(text: 'Rejected ($rejected)'),
         ],
       ),
     );
   }
 
+  // ── List builder ──────────────────────────────────────────────────────────
+
   Widget _buildList(
-    List<Map<String, dynamic>> books, {
-    required bool showActions,
+    List<QueryDocumentSnapshot> docs, {
+    required bool showDelete,
   }) {
-    if (books.isEmpty) {
+    if (docs.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -221,7 +246,7 @@ class _MyListedBooksScreenState extends State<MyListedBooksScreen>
             ),
             const SizedBox(height: 16),
             Text(
-              showActions ? 'No active listings' : 'No sold books yet',
+              showDelete ? 'No listings here' : 'No sold books yet',
               style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -230,8 +255,8 @@ class _MyListedBooksScreenState extends State<MyListedBooksScreen>
             ),
             const SizedBox(height: 6),
             Text(
-              showActions
-                  ? 'Tap "Sell a Book" to list one'
+              showDelete
+                  ? 'Books you list will appear here'
                   : 'Your sold books will appear here',
               style: TextStyle(fontSize: 13, color: Colors.grey.shade400),
             ),
@@ -242,18 +267,64 @@ class _MyListedBooksScreenState extends State<MyListedBooksScreen>
 
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: books.length,
-      itemBuilder: (context, index) =>
-          _buildBookCard(books[index], showActions: showActions),
+      itemCount: docs.length,
+      itemBuilder: (context, i) {
+        final doc = docs[i];
+        final data = doc.data() as Map<String, dynamic>;
+        return _BookCard(
+          docId: doc.id,
+          data: data,
+          showDelete: showDelete,
+          conditionColor: _conditionColor(data['condition'] ?? ''),
+          statusLabel:
+              _statusLabel[data['status']] ?? (data['status'] ?? 'Unknown'),
+          statusColor: _statusColor[data['status']] ?? Colors.grey,
+          timeAgo: _timeAgo(data['createdAt']),
+          onDelete: () => _confirmDelete(doc.id, data['bookName'] ?? 'Book'),
+        );
+      },
     );
   }
+}
 
-  Widget _buildBookCard(
-    Map<String, dynamic> book, {
-    required bool showActions,
-  }) {
-    final conditionColor = _conditionColor(book['condition']);
-    final statusColor = _statusColor(book['status']);
+// ── Book Card ─────────────────────────────────────────────────────────────────
+
+class _BookCard extends StatelessWidget {
+  final String docId;
+  final Map<String, dynamic> data;
+  final bool showDelete;
+  final Color conditionColor;
+  final String statusLabel;
+  final Color statusColor;
+  final String timeAgo;
+  final VoidCallback onDelete;
+
+  static const brown = Color(0xFF613613);
+  static const mediumBrown = Color(0xFF7C4700);
+  static const accentOrange = Color(0xFFE07B39);
+
+  const _BookCard({
+    required this.docId,
+    required this.data,
+    required this.showDelete,
+    required this.conditionColor,
+    required this.statusLabel,
+    required this.statusColor,
+    required this.timeAgo,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bookName = data['bookName'] as String? ?? 'Unknown Book';
+    final authorName = data['authorName'] as String? ?? '';
+    final edition = data['edition'] as String? ?? '';
+    final condition = data['condition'] as String? ?? '';
+    final listingType = data['listingType'] as String? ?? 'thrift';
+    final askingPrice = (data['askingPrice'] as num?)?.toDouble() ?? 0;
+    final buyingPrice = (data['buyingPrice'] as num?)?.toDouble() ?? 0;
+    final category = data['category'] as String? ?? '';
+    final status = data['status'] as String? ?? '';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -273,10 +344,11 @@ class _MyListedBooksScreenState extends State<MyListedBooksScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ── Top row: book icon + info ──────────────────────────────
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Book cover
+                // Book cover placeholder
                 Container(
                   width: 64,
                   height: 84,
@@ -292,7 +364,9 @@ class _MyListedBooksScreenState extends State<MyListedBooksScreen>
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
-                    Icons.menu_book_rounded,
+                    listingType == 'published'
+                        ? Icons.auto_stories_rounded
+                        : Icons.menu_book_rounded,
                     color: brown.withValues(alpha: 0.4),
                     size: 32,
                   ),
@@ -303,13 +377,13 @@ class _MyListedBooksScreenState extends State<MyListedBooksScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Title & status
+                      // Title + status badge
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
                             child: Text(
-                              book['title'],
+                              bookName,
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 15,
@@ -324,11 +398,11 @@ class _MyListedBooksScreenState extends State<MyListedBooksScreen>
                               vertical: 3,
                             ),
                             decoration: BoxDecoration(
-                              color: statusColor.withValues(alpha: 0.1),
+                              color: statusColor.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
-                              book['status'],
+                              statusLabel,
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
@@ -339,8 +413,9 @@ class _MyListedBooksScreenState extends State<MyListedBooksScreen>
                         ],
                       ),
                       const SizedBox(height: 3),
+
                       Text(
-                        book['author'],
+                        authorName,
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey.shade500,
@@ -348,63 +423,63 @@ class _MyListedBooksScreenState extends State<MyListedBooksScreen>
                       ),
                       const SizedBox(height: 8),
 
-                      // Condition + edition
-                      Row(
+                      // Chips row: condition + edition + listingType
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
+                          if (condition.isNotEmpty)
+                            _chip(condition, conditionColor),
+                          if (listingType == 'published')
+                            _chip('Published', const Color(0xFF7C3AED)),
+                          if (listingType == 'thrift')
+                            _chip('Thrift', const Color(0xFF0E7490)),
+                          if (category.isNotEmpty)
+                            _chip(
+                              category,
+                              Colors.grey.shade500,
+                              bg: Colors.grey.shade100,
                             ),
-                            decoration: BoxDecoration(
-                              color: conditionColor.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              book['condition'],
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: conditionColor,
-                              ),
-                            ),
-                          ),
-                          if (book['edition'] != '') ...[
-                            const SizedBox(width: 6),
-                            Text(
-                              book['edition'],
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.grey.shade400,
-                              ),
-                            ),
-                          ],
                         ],
                       ),
                       const SizedBox(height: 8),
 
-                      // Price
+                      // Price row
                       Row(
                         children: [
                           Text(
-                            '৳${book['askingPrice']}',
+                            '৳${askingPrice.toStringAsFixed(0)}',
                             style: const TextStyle(
                               fontSize: 17,
                               fontWeight: FontWeight.bold,
                               color: accentOrange,
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '৳${book['buyingPrice']} original',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.grey.shade400,
-                              decoration: TextDecoration.lineThrough,
+                          if (buyingPrice > 0) ...[
+                            const SizedBox(width: 8),
+                            Text(
+                              '৳${buyingPrice.toStringAsFixed(0)} original',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey.shade400,
+                                decoration: TextDecoration.lineThrough,
+                              ),
                             ),
-                          ),
+                          ],
                         ],
                       ),
+
+                      // Edition
+                      if (edition.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          edition,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey.shade400,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -415,80 +490,41 @@ class _MyListedBooksScreenState extends State<MyListedBooksScreen>
             const Divider(height: 1),
             const SizedBox(height: 10),
 
-            // Stats & actions row
+            // ── Bottom row: posted time + actions ──────────────────────
             Row(
               children: [
-                // Views
                 Icon(
-                  Icons.visibility_outlined,
+                  Icons.access_time_rounded,
                   size: 14,
                   color: Colors.grey.shade400,
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  '${book['views']} views',
+                  'Posted $timeAgo',
                   style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
                 ),
-                const SizedBox(width: 14),
 
-                // Interested
-                Icon(
-                  Icons.people_outline_rounded,
-                  size: 14,
-                  color: Colors.grey.shade400,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  '${book['interested']} interested',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-                ),
-                const SizedBox(width: 14),
-
-                // Posted date
-                Icon(
-                  Icons.calendar_today_outlined,
-                  size: 14,
-                  color: Colors.grey.shade400,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  book['postedDate'],
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-                ),
+                // Rejected reason hint
+                if (status == 'rejected') ...[
+                  const SizedBox(width: 12),
+                  Icon(
+                    Icons.info_outline_rounded,
+                    size: 14,
+                    color: Colors.red.shade300,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Didn\'t pass review',
+                    style: TextStyle(fontSize: 11, color: Colors.red.shade300),
+                  ),
+                ],
 
                 const Spacer(),
 
-                // Actions
-                if (showActions) ...[
-                  // Edit
+                // Delete button (active + rejected tabs only)
+                if (showDelete)
                   GestureDetector(
-                    onTap: () {
-                      // TODO: Navigate to edit listing screen
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Edit listing — coming soon!'),
-                          backgroundColor: brown,
-                        ),
-                      );
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(7),
-                      decoration: BoxDecoration(
-                        color: brown.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(
-                        Icons.edit_outlined,
-                        size: 16,
-                        color: brown,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-
-                  // Delete
-                  GestureDetector(
-                    onTap: () => _confirmDelete(book),
+                    onTap: onDelete,
                     child: Container(
                       padding: const EdgeInsets.all(7),
                       decoration: BoxDecoration(
@@ -502,10 +538,27 @@ class _MyListedBooksScreenState extends State<MyListedBooksScreen>
                       ),
                     ),
                   ),
-                ],
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _chip(String label, Color color, {Color? bg}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg ?? color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+          color: color,
         ),
       ),
     );

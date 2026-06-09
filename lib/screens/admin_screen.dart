@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AdminScreen extends StatefulWidget {
@@ -16,7 +17,15 @@ class _AdminScreenState extends State<AdminScreen>
   static const accentOrange = Color(0xFFE07B39);
   static const backgroundColor = Color(0xFFF5F0E9);
 
+  // ── ADMIN UIDs — same list as profile_page.dart ──────────────
+  static const _adminUids = [
+    'ej8fi1fN0JQsjgaOFVpWCa8KUTI2', // Towsif
+    // 'PARTNER_UID_HERE',            // Partner (add later)
+  ];
+
   String _selectedFilter = 'pending_review';
+  bool _isAdmin = false;
+  bool _checkingAuth = true;
 
   @override
   void initState() {
@@ -37,6 +46,16 @@ class _AdminScreenState extends State<AdminScreen>
         }
       });
     });
+    _checkAdmin();
+  }
+
+  // ── Check if current user is admin ───────────────────────────
+  void _checkAdmin() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    setState(() {
+      _isAdmin = _adminUids.contains(uid);
+      _checkingAuth = false;
+    });
   }
 
   @override
@@ -50,7 +69,6 @@ class _AdminScreenState extends State<AdminScreen>
       await FirebaseFirestore.instance.collection('books').doc(docId).update({
         'status': status,
       });
-
       _showSnack(
         status == 'approved' ? 'Book approved! ✅' : 'Book rejected ❌',
         status == 'approved' ? const Color(0xFF059669) : Colors.redAccent,
@@ -73,7 +91,6 @@ class _AdminScreenState extends State<AdminScreen>
 
   void _showBookDetail(Map<String, dynamic> book, String docId) {
     final isPending = book['status'] == 'pending_review';
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -99,8 +116,6 @@ class _AdminScreenState extends State<AdminScreen>
                   ),
                 ),
               ),
-
-              // Status badge
               Row(
                 children: [
                   const Text(
@@ -116,7 +131,6 @@ class _AdminScreenState extends State<AdminScreen>
                 ],
               ),
               const SizedBox(height: 20),
-
               _detailRow('Book Name', book['bookName'] ?? '-'),
               _detailRow('Author', book['authorName'] ?? '-'),
               _detailRow('Edition', book['edition'] ?? '-'),
@@ -137,7 +151,6 @@ class _AdminScreenState extends State<AdminScreen>
                     : '-',
               ),
               const SizedBox(height: 24),
-
               if (isPending)
                 Row(
                   children: [
@@ -299,8 +312,91 @@ class _AdminScreenState extends State<AdminScreen>
     );
   }
 
+  // ── ACCESS DENIED screen ──────────────────────────────────────
+  Widget _buildAccessDenied() {
+    return Scaffold(
+      backgroundColor: backgroundColor,
+      appBar: AppBar(
+        backgroundColor: brown,
+        foregroundColor: Colors.white,
+        title: const Text(
+          'Admin Panel',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 90,
+                height: 90,
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.lock_outline_rounded,
+                  size: 48,
+                  color: Colors.red,
+                ),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Access Denied',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'You don\'t have permission to access the Admin Panel.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 32),
+              ElevatedButton.icon(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                label: const Text(
+                  'Go Back',
+                  style: TextStyle(color: Colors.white),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: brown,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 14,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    // ── Still checking ────────────────────────────────────────
+    if (_checkingAuth) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator(color: brown)),
+      );
+    }
+
+    // ── Not admin → show access denied ───────────────────────
+    if (!_isAdmin) return _buildAccessDenied();
+
+    // ── Admin → show full panel ───────────────────────────────
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
@@ -338,7 +434,6 @@ class _AdminScreenState extends State<AdminScreen>
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator(color: brown));
           }
-
           if (snapshot.hasError) {
             return Center(
               child: Text(

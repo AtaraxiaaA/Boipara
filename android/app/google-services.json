@@ -7,12 +7,17 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:765521707078:android:26c64d04da94f3adc1ca47",
+        "mobilesdk_app_id": "1:765521707078:android:2035729810f086a7c1ca47",
         "android_client_info": {
-          "package_name": "com.example.bibliobd"
+          "package_name": "com.example.boipara"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "765521707078-5442qjttaov37anga0to6rs09brjr5a5.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBP12UhaEiR27stIsYpeHcXTTmf_A61xDU"
@@ -20,7 +25,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "765521707078-5442qjttaov37anga0to6rs09brjr5a5.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "765521707078-a4eq9vkgtq6skbuun5a8pvajlv6u2o5a.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.bibliobd"
+              }
+            }
+          ]
         }
       }
     }

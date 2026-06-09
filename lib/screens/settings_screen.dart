@@ -551,7 +551,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   onTap: () => _launchUrl(
                     // Replace with your actual Play Store package name after publishing
-                    'https://play.google.com/store/apps/details?id=com.example.bibliobd',
+                    'https://play.google.com/store/apps/details?id=com.example.boipara',
                   ),
                 ),
                 _settingsTile(
