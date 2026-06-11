@@ -1,4 +1,4 @@
-package com.example.boipara
+package com.boipara.app
 
 import io.flutter.embedding.android.FlutterActivity
 
