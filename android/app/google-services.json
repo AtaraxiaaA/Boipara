@@ -7,12 +7,20 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:765521707078:android:2035729810f086a7c1ca47",
+        "mobilesdk_app_id": "1:765521707078:android:c5e96481ba4c4edec1ca47",
         "android_client_info": {
-          "package_name": "com.example.boipara"
+          "package_name": "com.boipara.app"
         }
       },
       "oauth_client": [
+        {
+          "client_id": "765521707078-sldi4tmp61d1ap9mqh63tn8d8s1644f0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.boipara.app",
+            "certificate_hash": "eabd9b1aa5e84fc0e36f30670dbef32def897fdc"
+          }
+        },
         {
           "client_id": "765521707078-5442qjttaov37anga0to6rs09brjr5a5.apps.googleusercontent.com",
           "client_type": 3
