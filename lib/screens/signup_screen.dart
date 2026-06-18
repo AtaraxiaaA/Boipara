@@ -3,8 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'otp_screen.dart';
 import 'google_phone_verify_screen.dart';
+import 'confirmation_screen.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -18,7 +18,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  final _mobileController = TextEditingController(text: '+880');
 
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
@@ -35,22 +34,16 @@ class _SignUpScreenState extends State<SignUpScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
-    _mobileController.dispose();
     super.dispose();
   }
 
-  Future<void> _sendOtp() async {
+  Future<void> _signUp() async {
     final username = _usernameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
     final confirmPassword = _confirmPasswordController.text.trim();
-    final mobile = _mobileController.text.trim();
 
-    if (username.isEmpty ||
-        email.isEmpty ||
-        password.isEmpty ||
-        confirmPassword.isEmpty ||
-        mobile.isEmpty) {
+    if (username.isEmpty || email.isEmpty || password.isEmpty || confirmPassword.isEmpty) {
       _showError('Please fill in all fields');
       return;
     }
@@ -62,102 +55,133 @@ class _SignUpScreenState extends State<SignUpScreen> {
       _showError('Passwords do not match');
       return;
     }
-    if (!mobile.startsWith('+')) {
-      _showError('Mobile must start with country code e.g. +8801XXXXXXXXX');
-      return;
-    }
 
     setState(() => _isLoading = true);
 
-    await FirebaseAuth.instance.verifyPhoneNumber(
-      phoneNumber: mobile,
-      timeout: const Duration(seconds: 60),
-      verificationCompleted: (PhoneAuthCredential credential) {},
-      verificationFailed: (FirebaseAuthException e) {
-        setState(() => _isLoading = false);
-        _showError(e.message ?? 'Failed to send OTP');
-      },
-      codeSent: (String verificationId, int? resendToken) {
-        setState(() => _isLoading = false);
-        Navigator.push(
+    try {
+      // Create user with email and password directly
+      final userCredential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(
+            email: email,
+            password: password,
+          );
+
+      // Update display name
+      await userCredential.user?.updateDisplayName(username);
+
+      // Save user to Firestore
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userCredential.user!.uid)
+          .set({
+            'uid': userCredential.user!.uid,
+            'username': username,
+            'email': email,
+            'mobile': '',
+            'phoneVerified': false,
+            'createdAt': FieldValue.serverTimestamp(),
+            'profilePhoto': '',
+            'bio': '',
+            'gender': '',
+            'address': '',
+          });
+
+      if (mounted) {
+        // Navigate to confirmation screen instead of directly to home
+        Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (_) => OtpScreen(
-              verificationId: verificationId,
-              username: username,
-              email: email,
-              password: password,
-              mobile: mobile,
-            ),
+            builder: (_) => ConfirmationScreen(username: username),
           ),
         );
-      },
-      codeAutoRetrievalTimeout: (String verificationId) {
-        setState(() => _isLoading = false);
-      },
-    );
-  }
-
-  Future<void> _googleSignIn() async {
-    setState(() => _isGoogleLoading = true);
-
-    try {
-      UserCredential userCredential;
-
-      if (kIsWeb) {
-        final googleProvider = GoogleAuthProvider();
-        userCredential = await FirebaseAuth.instance.signInWithPopup(
-          googleProvider,
-        );
-      } else {
-        final GoogleSignIn googleSignIn = GoogleSignIn();
-        final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
-
-        if (googleUser == null) {
-          setState(() => _isGoogleLoading = false);
-          return;
-        }
-
-        final GoogleSignInAuthentication googleAuth =
-            await googleUser.authentication;
-
-        final credential = GoogleAuthProvider.credential(
-          accessToken: googleAuth.accessToken,
-          idToken: googleAuth.idToken,
-        );
-
-        userCredential = await FirebaseAuth.instance.signInWithCredential(
-          credential,
-        );
       }
-
-      final user = userCredential.user!;
-
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-
-      if (doc.exists) {
-        if (mounted) {
-          Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
-        }
-      } else {
-        if (mounted) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => GooglePhoneVerifyScreen(googleUser: user),
-            ),
-          );
-        }
+    } on FirebaseAuthException catch (e) {
+      String message;
+      switch (e.code) {
+        case 'email-already-in-use':
+          message = 'This email is already registered';
+          break;
+        case 'invalid-email':
+          message = 'Please enter a valid email address';
+          break;
+        case 'weak-password':
+          message = 'Password is too weak';
+          break;
+        default:
+          message = e.message ?? 'Registration failed. Please try again';
       }
+      _showError(message);
     } catch (e) {
-      _showError('Google sign-in failed. Please try again');
+      _showError('Something went wrong. Please try again');
     } finally {
-      if (mounted) setState(() => _isGoogleLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
+
+ Future<void> _googleSignIn() async {
+  setState(() => _isGoogleLoading = true);
+
+  try {
+    UserCredential userCredential;
+
+    if (kIsWeb) {
+      final googleProvider = GoogleAuthProvider();
+      userCredential = await FirebaseAuth.instance.signInWithPopup(
+        googleProvider,
+      );
+    } else {
+      final GoogleSignIn googleSignIn = GoogleSignIn();
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+
+      if (googleUser == null) {
+        setState(() => _isGoogleLoading = false);
+        return;
+      }
+
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
+
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      userCredential = await FirebaseAuth.instance.signInWithCredential(
+        credential,
+      );
+    }
+
+    final user = userCredential.user!;
+
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+
+    if (doc.exists) {
+      if (mounted) {
+        Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+      }
+    } else {
+      if (mounted) {
+        // This will now auto-complete without asking for phone
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => GooglePhoneVerifyScreen(googleUser: user),
+          ),
+        );
+      }
+    }
+  } catch (e) {
+    _showError('Google sign-in failed. Please try again');
+  } finally {
+    if (mounted) setState(() => _isGoogleLoading = false);
+  }
+}
+
+       
+          
 
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -518,31 +542,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         ],
                       ),
                     ],
-                    const SizedBox(height: 16),
-
-                    // Mobile
-                    _buildField(
-                      controller: _mobileController,
-                      label: 'Mobile (e.g. +8801XXXXXXXXX)',
-                      icon: Icons.phone_android_outlined,
-                      keyboardType: TextInputType.phone,
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '  Include country code: +880 for Bangladesh',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey.shade500,
-                      ),
-                    ),
                     const SizedBox(height: 32),
 
-                    // SEND OTP Button
+                    // SIGN UP Button
                     SizedBox(
                       width: double.infinity,
                       height: 56,
                       child: ElevatedButton(
-                        onPressed: _isLoading ? null : _sendOtp,
+                        onPressed: _isLoading ? null : _signUp,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: primaryBrown,
                           foregroundColor: Colors.white,
@@ -561,7 +568,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                 ),
                               )
                             : const Text(
-                                'SEND OTP',
+                                'SIGN UP',
                                 style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
@@ -590,7 +597,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     ),
                     const SizedBox(height: 24),
 
-                    // Google button only
+                    // Google button
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [

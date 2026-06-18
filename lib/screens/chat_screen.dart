@@ -276,7 +276,7 @@ class _ChatScreenState extends State<ChatScreen> {
           if (!isMe) ...[
             CircleAvatar(
               radius: 14,
-              backgroundColor: darkBrown.withOpacity(0.15),
+              backgroundColor: darkBrown.withValues(alpha: 0.15),
               backgroundImage: widget.otherUserPhoto.isNotEmpty
                   ? NetworkImage(widget.otherUserPhoto)
                   : null,
@@ -317,7 +317,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 4,
                       ),
                     ],
@@ -355,7 +355,7 @@ class _ChatScreenState extends State<ChatScreen> {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
+            color: Colors.black.withValues(alpha: 0.06),
             blurRadius: 8,
             offset: const Offset(0, -2),
           ),

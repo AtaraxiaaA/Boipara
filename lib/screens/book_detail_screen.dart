@@ -303,7 +303,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF059669).withOpacity(0.1),
+                color: const Color(0xFF059669).withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
@@ -417,7 +417,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 8,
                     offset: const Offset(0, 3),
                   ),
@@ -432,8 +432,8 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
-                          darkBrown.withOpacity(0.15),
-                          darkBrown.withOpacity(0.08),
+                          darkBrown.withValues(alpha: 0.15),
+                          darkBrown.withValues(alpha: 0.08),
                         ],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
@@ -442,7 +442,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                     ),
                     child: Icon(
                       Icons.menu_book_rounded,
-                      color: darkBrown.withOpacity(0.4),
+                      color: darkBrown.withValues(alpha: 0.4),
                       size: 38,
                     ),
                   ),
@@ -484,7 +484,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                             vertical: 3,
                           ),
                           decoration: BoxDecoration(
-                            color: condColor.withOpacity(0.1),
+                            color: condColor.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
@@ -647,7 +647,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                 children: [
                   CircleAvatar(
                     radius: 22,
-                    backgroundColor: darkBrown.withOpacity(0.15),
+                    backgroundColor: darkBrown.withValues(alpha: 0.15),
                     backgroundImage: (book['sellerPhoto'] ?? '').isNotEmpty
                         ? NetworkImage(book['sellerPhoto'])
                         : null,
@@ -693,7 +693,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                           vertical: 7,
                         ),
                         decoration: BoxDecoration(
-                          color: accentOrange.withOpacity(0.1),
+                          color: accentOrange.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Row(
@@ -724,7 +724,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                         vertical: 5,
                       ),
                       decoration: BoxDecoration(
-                        color: darkBrown.withOpacity(0.1),
+                        color: darkBrown.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: const Text(
@@ -777,7 +777,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                           borderRadius: BorderRadius.circular(12),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.04),
+                              color: Colors.black.withValues(alpha: 0.04),
                               blurRadius: 6,
                             ),
                           ],
@@ -788,13 +788,13 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                             Expanded(
                               child: Container(
                                 decoration: BoxDecoration(
-                                  color: darkBrown.withOpacity(0.08),
+                                  color: darkBrown.withValues(alpha: 0.08),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Center(
                                   child: Icon(
                                     Icons.menu_book_rounded,
-                                    color: darkBrown.withOpacity(0.4),
+                                    color: darkBrown.withValues(alpha: 0.4),
                                     size: 28,
                                   ),
                                 ),
@@ -851,7 +851,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                     margin: const EdgeInsets.only(bottom: 8),
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: isSel ? col.withOpacity(0.06) : Colors.white,
+                      color: isSel ? col.withValues(alpha: 0.06) : Colors.white,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: isSel ? col : Colors.grey.shade200,
@@ -864,7 +864,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                           width: 36,
                           height: 36,
                           decoration: BoxDecoration(
-                            color: col.withOpacity(0.15),
+                            color: col.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Icon(
@@ -925,10 +925,10 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF059669).withOpacity(0.06),
+                  color: const Color(0xFF059669).withValues(alpha: 0.06),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: const Color(0xFF059669).withOpacity(0.2),
+                    color: const Color(0xFF059669).withValues(alpha: 0.2),
                   ),
                 ),
                 child: Row(
@@ -1007,9 +1007,9 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: darkBrown.withOpacity(0.05),
+                  color: darkBrown.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: darkBrown.withOpacity(0.2)),
+                  border: Border.all(color: darkBrown.withValues(alpha: 0.2)),
                 ),
                 child: const Row(
                   children: [
@@ -1039,9 +1039,9 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: Colors.orange.withOpacity(0.05),
+            color: Colors.orange.withValues(alpha: 0.05),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.orange.withOpacity(0.3)),
+            border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
           ),
           child: Row(
             children: [
@@ -1099,7 +1099,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: isSel ? darkBrown.withOpacity(0.05) : Colors.white,
+                color: isSel ? darkBrown.withValues(alpha: 0.05) : Colors.white,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                   color: isSel ? darkBrown : Colors.grey.shade200,
@@ -1137,7 +1137,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                                 decoration: BoxDecoration(
                                   color: const Color(
                                     0xFF059669,
-                                  ).withOpacity(0.1),
+                                  ).withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: const Text(
@@ -1190,14 +1190,14 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
               Icon(
                 Icons.add_circle_outline,
                 size: 15,
-                color: darkBrown.withOpacity(0.7),
+                color: darkBrown.withValues(alpha: 0.7),
               ),
               const SizedBox(width: 6),
               Text(
                 'Add or manage addresses',
                 style: TextStyle(
                   fontSize: 12,
-                  color: darkBrown.withOpacity(0.7),
+                  color: darkBrown.withValues(alpha: 0.7),
                   fontWeight: FontWeight.w500,
                 ),
               ),

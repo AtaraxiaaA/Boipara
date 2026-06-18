@@ -43,8 +43,12 @@ class _ClubsListScreenState extends State<ClubsListScreen> {
   }
 
   IconData _toIcon(dynamic v) {
-    if (v is int) return IconData(v, fontFamily: 'MaterialIcons');
     if (v is IconData) return v;
+    if (v is int) {
+      for (final icon in _clubIcons) {
+        if (icon.codePoint == v) return icon;
+      }
+    }
     return Icons.menu_book_rounded;
   }
 

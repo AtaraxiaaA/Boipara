@@ -98,7 +98,7 @@ class _CartScreenState extends State<CartScreen> {
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
-                              color: darkBrown.withOpacity(0.06),
+                              color: darkBrown.withValues(alpha: 0.06),
                               blurRadius: 8,
                               offset: const Offset(0, 3),
                             ),
@@ -113,8 +113,8 @@ class _CartScreenState extends State<CartScreen> {
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
                                   colors: [
-                                    darkBrown.withOpacity(0.15),
-                                    darkBrown.withOpacity(0.08),
+                                    darkBrown.withValues(alpha: 0.15),
+                                    darkBrown.withValues(alpha: 0.08),
                                   ],
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
@@ -123,7 +123,7 @@ class _CartScreenState extends State<CartScreen> {
                               ),
                               child: Icon(
                                 Icons.menu_book_rounded,
-                                color: darkBrown.withOpacity(0.4),
+                                color: darkBrown.withValues(alpha: 0.4),
                                 size: 30,
                               ),
                             ),
@@ -239,7 +239,7 @@ class _CartScreenState extends State<CartScreen> {
                     color: Colors.white,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
+                        color: Colors.black.withValues(alpha: 0.08),
                         blurRadius: 12,
                         offset: const Offset(0, -3),
                       ),

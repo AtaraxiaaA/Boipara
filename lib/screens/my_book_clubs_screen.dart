@@ -17,6 +17,18 @@ class _MyBookClubsScreenState extends State<MyBookClubsScreen> {
 
   String get _uid => FirebaseAuth.instance.currentUser?.uid ?? '';
 
+  // Same fixed icon set used when clubs are created (see clubs_list_screen.dart)
+  static const List<IconData> _clubIcons = [
+    Icons.menu_book_rounded,
+    Icons.auto_stories_rounded,
+    Icons.library_books_rounded,
+    Icons.collections_bookmark_rounded,
+    Icons.bookmark_rounded,
+    Icons.school_rounded,
+    Icons.local_library_rounded,
+    Icons.book_rounded,
+  ];
+
   Color _toColor(dynamic v) {
     if (v is int) return Color(v);
     if (v is Color) return v;
@@ -24,8 +36,12 @@ class _MyBookClubsScreenState extends State<MyBookClubsScreen> {
   }
 
   IconData _toIcon(dynamic v) {
-    if (v is int) return IconData(v, fontFamily: 'MaterialIcons');
     if (v is IconData) return v;
+    if (v is int) {
+      for (final icon in _clubIcons) {
+        if (icon.codePoint == v) return icon;
+      }
+    }
     return Icons.menu_book_rounded;
   }
 

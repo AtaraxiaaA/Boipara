@@ -15,7 +15,7 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _mobileController = TextEditingController(text: '+88');
+  final _emailController = TextEditingController(); // Changed from mobile
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isLoading = false;
@@ -28,37 +28,24 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
-    _mobileController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
   // ── Login ─────────────────────────────────────────────────────────────
   Future<void> _login() async {
-    final mobile = _mobileController.text.trim();
+    final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
-    if (mobile.isEmpty || password.isEmpty) {
-      _showError('Please enter mobile number and password');
+    if (email.isEmpty || password.isEmpty) {
+      _showError('Please enter email and password');
       return;
     }
 
     setState(() => _isLoading = true);
 
     try {
-      final query = await FirebaseFirestore.instance
-          .collection('users')
-          .where('mobile', isEqualTo: mobile)
-          .limit(1)
-          .get();
-
-      if (query.docs.isEmpty) {
-        _showError('No account found with this mobile number');
-        setState(() => _isLoading = false);
-        return;
-      }
-
-      final email = query.docs.first['email'] as String;
       await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: email,
         password: password,
@@ -72,13 +59,16 @@ class _LoginScreenState extends State<LoginScreen> {
       switch (e.code) {
         case 'wrong-password':
         case 'invalid-credential':
-          message = 'Incorrect password';
+          message = 'Incorrect email or password';
           break;
         case 'user-disabled':
           message = 'This account has been disabled';
           break;
         case 'too-many-requests':
           message = 'Too many attempts. Try again later';
+          break;
+        case 'user-not-found':
+          message = 'No account found with this email';
           break;
         default:
           message = 'Login failed. Please try again';
@@ -93,62 +83,65 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // ── Google Sign-In ────────────────────────────────────────────────────
   Future<void> _googleSignIn() async {
-    setState(() => _isGoogleLoading = true);
-    try {
-      UserCredential userCredential;
+  setState(() => _isGoogleLoading = true);
+  try {
+    UserCredential userCredential;
 
-      if (kIsWeb) {
-        final googleProvider = GoogleAuthProvider();
-        userCredential = await FirebaseAuth.instance.signInWithPopup(
-          googleProvider,
-        );
-      } else {
-        final GoogleSignIn googleSignIn = GoogleSignIn();
-        final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
-        if (googleUser == null) {
-          setState(() => _isGoogleLoading = false);
-          return;
-        }
-        final googleAuth = await googleUser.authentication;
-        final credential = GoogleAuthProvider.credential(
-          accessToken: googleAuth.accessToken,
-          idToken: googleAuth.idToken,
-        );
-        userCredential = await FirebaseAuth.instance.signInWithCredential(
-          credential,
-        );
+    if (kIsWeb) {
+      final googleProvider = GoogleAuthProvider();
+      userCredential = await FirebaseAuth.instance.signInWithPopup(
+        googleProvider,
+      );
+    } else {
+      final GoogleSignIn googleSignIn = GoogleSignIn();
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+      if (googleUser == null) {
+        setState(() => _isGoogleLoading = false);
+        return;
       }
-
-      final user = userCredential.user!;
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-
-      if (doc.exists) {
-        if (mounted)
-          Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
-      } else {
-        if (mounted)
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => GooglePhoneVerifyScreen(googleUser: user),
-            ),
-          );
-      }
-    } catch (_) {
-      _showError('Google sign-in failed. Please try again');
-    } finally {
-      if (mounted) setState(() => _isGoogleLoading = false);
+      final googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+      userCredential = await FirebaseAuth.instance.signInWithCredential(
+        credential,
+      );
     }
-  }
 
+    final user = userCredential.user!;
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+
+    if (doc.exists) {
+      if (mounted)
+        Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+    } else {
+      if (mounted)
+        // This will now auto-complete without asking for phone
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => GooglePhoneVerifyScreen(googleUser: user),
+          ),
+        );
+    }
+  } catch (_) {
+    _showError('Google sign-in failed. Please try again');
+  } finally {
+    if (mounted) setState(() => _isGoogleLoading = false);
+  }
+}
+  
+
+      
+       
   // ── Guest Login ───────────────────────────────────────────────────────
   Future<void> _guestLogin() async {
     setState(() => _isGuestLoading = true);
     try {
-      // Firebase anonymous sign-in — free, no OTP, no email
       await FirebaseAuth.instance.signInAnonymously();
       if (mounted)
         Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
@@ -186,7 +179,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 child: Column(
                   children: [
-                    _buildMobileField(),
+                    _buildEmailField(), // Changed from mobile to email
                     const SizedBox(height: 20),
                     _buildPasswordField(),
                     const SizedBox(height: 16),
@@ -345,12 +338,12 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildMobileField() => TextField(
-    controller: _mobileController,
-    keyboardType: TextInputType.phone,
+  Widget _buildEmailField() => TextField(
+    controller: _emailController,
+    keyboardType: TextInputType.emailAddress,
     decoration: InputDecoration(
-      labelText: 'Mobile Number (e.g. +8801XXXXXXXXX)',
-      prefixIcon: const Icon(Icons.phone_android_outlined, color: darkBrown),
+      labelText: 'Email Address',
+      prefixIcon: const Icon(Icons.email_outlined, color: darkBrown),
       filled: true,
       fillColor: Colors.white,
       border: OutlineInputBorder(
@@ -402,7 +395,6 @@ class _LoginScreenState extends State<LoginScreen> {
     ),
   );
 
-  // ── Forgot Password — navigates to new OTP-based screen ───────────────
   Widget _buildForgotPassword() => Align(
     alignment: Alignment.centerRight,
     child: TextButton(
