@@ -3,8 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'google_phone_verify_screen.dart';
-import 'confirmation_screen.dart';
+import 'email_verification_screen.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -59,7 +58,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Create user with email and password directly
+      // Create user with email and password
       final userCredential = await FirebaseAuth.instance
           .createUserWithEmailAndPassword(
             email: email,
@@ -68,6 +67,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
       // Update display name
       await userCredential.user?.updateDisplayName(username);
+
+      // Send email verification
+      await userCredential.user?.sendEmailVerification();
 
       // Save user to Firestore
       await FirebaseFirestore.instance
@@ -78,7 +80,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
             'username': username,
             'email': email,
             'mobile': '',
-            'phoneVerified': false,
+            'emailVerified': false,
             'createdAt': FieldValue.serverTimestamp(),
             'profilePhoto': '',
             'bio': '',
@@ -87,11 +89,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
           });
 
       if (mounted) {
-        // Navigate to confirmation screen instead of directly to home
+        // Navigate to email verification screen
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (_) => ConfirmationScreen(username: username),
+            builder: (_) => EmailVerificationScreen(username: username),
           ),
         );
       }
@@ -163,14 +165,25 @@ class _SignUpScreenState extends State<SignUpScreen> {
         Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
       }
     } else {
+      // New Google user — create Firestore doc and go to home
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .set({
+            'uid': user.uid,
+            'username': user.displayName ?? 'Google User',
+            'email': user.email ?? '',
+            'mobile': '',
+            'profilePhoto': user.photoURL ?? '',
+            'emailVerified': true,
+            'createdAt': FieldValue.serverTimestamp(),
+            'bio': '',
+            'gender': '',
+            'address': '',
+          });
+
       if (mounted) {
-        // This will now auto-complete without asking for phone
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => GooglePhoneVerifyScreen(googleUser: user),
-          ),
-        );
+        Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
       }
     }
   } catch (e) {

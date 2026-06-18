@@ -29,7 +29,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String _existingPhotoUrl = '';
   bool _isSaving = false;
   bool _isLoading = true;
-  String _originalPhone = '';
 
   final List<String> _genders = [
     'Male',
@@ -61,7 +60,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _phoneController.text = data['mobile'] ?? '';
         _bioController.text = data['bio'] ?? '';
         _existingPhotoUrl = data['profilePhoto'] ?? '';
-        _originalPhone = data['mobile'] ?? '';
 
         final gender = data['gender'] ?? 'Male';
         if (_genders.contains(gender)) _selectedGender = gender;
@@ -103,168 +101,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
-
-    final newPhone = _phoneController.text.trim();
-    final phoneChanged = newPhone != _originalPhone;
-
-    if (phoneChanged) {
-      if (!newPhone.startsWith('+')) {
-        _showError('Phone must start with country code e.g. +8801XXXXXXXXX');
-        return;
-      }
-      await _verifyNewPhone(newPhone);
-      return;
-    }
-
     await _saveToFirestore();
   }
 
-  Future<void> _verifyNewPhone(String newPhone) async {
-    setState(() => _isSaving = true);
 
-    await FirebaseAuth.instance.verifyPhoneNumber(
-      phoneNumber: newPhone,
-      timeout: const Duration(seconds: 60),
-      verificationCompleted: (PhoneAuthCredential credential) {},
-      verificationFailed: (FirebaseAuthException e) {
-        setState(() => _isSaving = false);
-        _showError(e.message ?? 'Failed to send OTP');
-      },
-      codeSent: (String verificationId, int? resendToken) {
-        setState(() => _isSaving = false);
-        _showOtpDialog(verificationId, newPhone);
-      },
-      codeAutoRetrievalTimeout: (String verificationId) {
-        setState(() => _isSaving = false);
-      },
-    );
-  }
 
-  void _showOtpDialog(String verificationId, String newPhone) {
-    final otpControllers = List.generate(6, (_) => TextEditingController());
-    final focusNodes = List.generate(6, (_) => FocusNode());
-    bool isVerifying = false;
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: const Text(
-            'Verify New Number',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Enter the OTP sent to $newPhone',
-                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: List.generate(6, (index) {
-                  return SizedBox(
-                    width: 40,
-                    height: 48,
-                    child: TextField(
-                      controller: otpControllers[index],
-                      focusNode: focusNodes[index],
-                      keyboardType: TextInputType.number,
-                      maxLength: 1,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: brown,
-                      ),
-                      decoration: InputDecoration(
-                        counterText: '',
-                        filled: true,
-                        fillColor: Colors.grey.shade50,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(color: Colors.grey.shade300),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(color: Colors.grey.shade300),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: brown, width: 2),
-                        ),
-                      ),
-                      onChanged: (value) {
-                        if (value.isNotEmpty && index < 5) {
-                          focusNodes[index + 1].requestFocus();
-                        }
-                        if (value.isEmpty && index > 0) {
-                          focusNodes[index - 1].requestFocus();
-                        }
-                      },
-                    ),
-                  );
-                }),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: isVerifying
-                  ? null
-                  : () async {
-                      final otp = otpControllers.map((c) => c.text).join();
-                      if (otp.length < 6) {
-                        _showError('Enter complete 6-digit OTP');
-                        return;
-                      }
-                      setDialogState(() => isVerifying = true);
-                      try {
-                        final credential = PhoneAuthProvider.credential(
-                          verificationId: verificationId,
-                          smsCode: otp,
-                        );
-                        await FirebaseAuth.instance.currentUser
-                            ?.updatePhoneNumber(credential);
-                        if (context.mounted) Navigator.pop(context);
-                        await _saveToFirestore(newPhone: newPhone);
-                      } on FirebaseAuthException catch (e) {
-                        setDialogState(() => isVerifying = false);
-                        _showError(e.message ?? 'Invalid OTP');
-                      }
-                    },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: brown,
-                foregroundColor: Colors.white,
-              ),
-              child: isVerifying
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
-                      ),
-                    )
-                  : const Text('Verify'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _saveToFirestore({String? newPhone}) async {
+  Future<void> _saveToFirestore() async {
     setState(() => _isSaving = true);
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -278,12 +120,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           .update({
             'username': _nameController.text.trim(),
             'email': _emailController.text.trim(),
-            'mobile': newPhone ?? _phoneController.text.trim(),
+            'mobile': _phoneController.text.trim(),
             'bio': _bioController.text.trim(),
             'gender': _selectedGender,
           });
-
-      if (newPhone != null) setState(() => _originalPhone = newPhone);
 
       _showSuccess('Profile updated successfully!');
       if (mounted) Navigator.pop(context);
@@ -456,24 +296,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       keyboardType: TextInputType.phone,
                       validator: (v) =>
                           v!.trim().isEmpty ? 'Phone is required' : null,
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.info_outline,
-                          size: 12,
-                          color: Colors.grey.shade400,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Changing your number requires OTP verification',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.grey.shade500,
-                          ),
-                        ),
-                      ],
                     ),
                     const SizedBox(height: 14),
 

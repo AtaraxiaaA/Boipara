@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'signup_screen.dart';
-import 'google_phone_verify_screen.dart';
+import 'email_verification_screen.dart';
 import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -50,6 +50,23 @@ class _LoginScreenState extends State<LoginScreen> {
         email: email,
         password: password,
       );
+      final user = FirebaseAuth.instance.currentUser;
+
+      if (user != null && !user.emailVerified) {
+        // Email not verified — resend verification and redirect
+        await user.sendEmailVerification();
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => EmailVerificationScreen(
+                username: user.displayName ?? 'User',
+              ),
+            ),
+          );
+        }
+        return;
+      }
 
       if (mounted) {
         Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
@@ -119,14 +136,25 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted)
         Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
     } else {
+      // New Google user — create Firestore doc and go to home
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .set({
+            'uid': user.uid,
+            'username': user.displayName ?? 'Google User',
+            'email': user.email ?? '',
+            'mobile': '',
+            'profilePhoto': user.photoURL ?? '',
+            'emailVerified': true,
+            'createdAt': FieldValue.serverTimestamp(),
+            'bio': '',
+            'gender': '',
+            'address': '',
+          });
+
       if (mounted)
-        // This will now auto-complete without asking for phone
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => GooglePhoneVerifyScreen(googleUser: user),
-          ),
-        );
+        Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
     }
   } catch (_) {
     _showError('Google sign-in failed. Please try again');
